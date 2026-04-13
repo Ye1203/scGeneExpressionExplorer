@@ -1,4 +1,3 @@
-
 library(shiny)
 library(shinyjs)
 library(Seurat)
@@ -177,18 +176,18 @@ step2UI <- function(id) {
   ns <- NS(id)
   
   tagList(
-      h4("Sample Comparisons:"),
-      uiOutput(ns("add_sample_comp_ui")),
-      br(),
-      div(id = ns("sample_cards_container"), class = "row"),
-      
-      fluidRow(column(12, hr())),
-      
-      h4("Cluster Comparisons:"),
-      uiOutput(ns("add_cluster_comp_ui")),
-      br(),
-      div(id = ns("cluster_cards_container"), class = "row"),
-      
+    h4("Sample Comparisons:"),
+    uiOutput(ns("add_sample_comp_ui")),
+    br(),
+    div(id = ns("sample_cards_container"), class = "row"),
+    
+    fluidRow(column(12, hr())),
+    
+    h4("Cluster Comparisons:"),
+    uiOutput(ns("add_cluster_comp_ui")),
+    br(),
+    div(id = ns("cluster_cards_container"), class = "row"),
+    
     fluidRow(
       column(12,hr()),
       column(
@@ -204,7 +203,7 @@ step2UI <- function(id) {
           "Review and Analysis",
           class = "btn-success",
           stype = "width:200px;"
-      )))
+        )))
   )
 }
 
@@ -245,7 +244,7 @@ step2Server <- function(id, sample_rows, cluster_rows, sample_meta, cluster_meta
             class = "btn-danger"
           ),
           p("If Step 1 comparisons change, recreate the cards.",
-             style = "color:red;")
+            style = "color:red;")
         )
       }
     })
@@ -771,35 +770,48 @@ ui <- fluidPage(
 
 server <- function(input, output, session) {
   
-  data_obj <- reactiveVal(NULL)
-  deg_obj <- reactiveVal(NULL)
-  gsea_obj <- reactiveVal(NULL)
-  visualization_marker <- reactiveVal(NULL)
+  # Reactive value
+  rv <- reactiveValues(
+    data_obj = NULL,
+    data_path = NULL,
+    
+    deg_obj = NULL,
+    deg_path = NULL,
+    
+    gsea_obj = NULL,
+    gsea_path = NULL,
+    
+    visualization_marker = ""
+  )
   
   # ----------------- Load Data -----------------
   
-  # Function
-  path_input_ui <- function(id, label, placeholder, reactive_obj, load_btn_class = "btn-success") {
+  # Enhanced path_input_ui with automatic dependency tracking
+  path_input_ui <- function(id, label, placeholder, value, load_btn_class = "btn-success") {
     
     input_path_id <- paste0(id, "_path")
     
-    if (!is.null(reactive_obj())) {
-      tags$div(
-        style = "padding: 8px; background-color: #e8f5e8; border-radius: 4px; border: 1px solid #c8e6c9;
-               display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;",
-        tags$p(
-          style = "margin: 0; overflow-wrap: break-word;",
-          "📁 ",
-          tags$strong("Loaded: "),
-          tags$code({
-            input[[input_path_id]]
-          })
+    if (!is.null(value)) {
+      fluidRow(
+        column(
+          10,
+          tags$div(
+            style = "padding: 8px; background-color: #e8f5e8;
+               border-radius: 4px; border: 1px solid #c8e6c9;",
+            "📁 ",
+            tags$strong("Loaded: "),
+            tags$code(value)
+          )
         ),
-        actionButton(
-          inputId = paste0("reset_", id, "_btn"),
-          label = "Reset",
-          class = "btn-warning",
-          style = "min-width: 180px; height: 35px; padding: 5px 10px;"
+        
+        column(
+          2,
+          actionButton(
+            inputId = paste0("reset_", id, "_obj_btn"),
+            label = "Reset",
+            class = "btn-warning",
+            style = "width: 100%; height: 35px;"
+          )
         )
       )
     } else {
@@ -827,12 +839,13 @@ server <- function(input, output, session) {
     }
   }
   
-  # Seurat
+  # Seurat data loading
   observeEvent(input$load_data, {
     showModal(modalDialog(title = "Loading Data", "Please wait...", footer = NULL, easyClose = FALSE))
     tryCatch({
       obj <- load_data_object(input$data_path, type = "seurat")
-      data_obj(obj)
+      rv$data_obj <- obj
+      rv$data_obj_path <- input$data_path
       removeModal()
       showNotification("Seurat data loaded successfully!", type = "message")
     }, error = function(e) {
@@ -841,12 +854,13 @@ server <- function(input, output, session) {
     })
   })
   
-  # DEG
+  # DEG data loading
   observeEvent(input$load_deg, {
     showModal(modalDialog(title = "Loading DEG Data", "Please wait...", footer = NULL, easyClose = FALSE))
     tryCatch({
       obj <- load_data_object(input$deg_path, type = "deg")
-      deg_obj(obj)
+      rv$deg_obj <- obj
+      rv$deg_obj_path <- input$deg_path
       removeModal()
       showNotification("DEG data loaded successfully!", type = "message")
     }, error = function(e) {
@@ -855,12 +869,13 @@ server <- function(input, output, session) {
     })
   })
   
-  # GSEA
+  # GSEA data loading
   observeEvent(input$load_gsea, {
     showModal(modalDialog(title = "Loading GSEA Data", "Please wait...", footer = NULL, easyClose = FALSE))
     tryCatch({
       obj <- load_data_object(input$gsea_path, type = "gsea")
-      gsea_obj(obj)
+      rv$gsea_obj <- obj
+      rv$gsea_obj_path <- input$gsea_path
       removeModal()
       showNotification("GSEA data loaded successfully!", type = "message")
     }, error = function(e) {
@@ -871,13 +886,13 @@ server <- function(input, output, session) {
   
   # ----------------- Reactive unique values -----------------
   sample_values <- reactive({
-    req(data_obj(), input$sample_column)
-    extract_unique_values(data_obj(), input$sample_column)
+    req(rv$data_obj, input$sample_column)
+    extract_unique_values(rv$data_obj, input$sample_column)
   })
   
   cluster_values <- reactive({
-    req(data_obj(), input$cluster_column)
-    extract_unique_values(data_obj(), input$cluster_column)
+    req(rv$data_obj, input$cluster_column)
+    extract_unique_values(rv$data_obj, input$cluster_column)
   })
   
   # ----------------- Modules -----------------
@@ -920,11 +935,15 @@ server <- function(input, output, session) {
   
   # ----------------- DEG UI -----------------
   output$deg_ui <- renderUI({
-    if (is.null(data_obj())) {
+    
+    if (is.null(rv$data_obj)) {
       tagList(
-      h4("Input Data Path"),
-      path_input_ui(id = "data",label = "Seurat File Path",placeholder = "/path/to/seurat_file.rds", reactive_obj = data_obj),
-      h4("Please load data first."))
+        h4("Input Data Path"),
+        path_input_ui(id = "data", label = "Seurat File Path", 
+                      placeholder = "/path/to/seurat_file.rds", 
+                      value = rv$data_obj_path),
+        h4("Please load data first.")
+      )
     } else {
       tagList(
         # Step 1 (original content wrapped in div)
@@ -947,8 +966,10 @@ server <- function(input, output, session) {
         br(),
         div(id = "step1_ui",
             fluidRow(
-              column(6, selectInput("sample_column", "meta.data sample column", choices = extract_meta_columns(data_obj()))),
-              column(6, selectInput("cluster_column", "meta.data cluster column", choices = extract_meta_columns(data_obj())))
+              column(6, selectInput("sample_column", "meta.data sample column", 
+                                    choices = extract_meta_columns(rv$data_obj))),
+              column(6, selectInput("cluster_column", "meta.data cluster column", 
+                                    choices = extract_meta_columns(rv$data_obj)))
             ),
             hr(),
             h3("Sample Analysis"),
@@ -1006,15 +1027,6 @@ server <- function(input, output, session) {
         )
       ),
       hr(),
-      # Columns - same row, each 1/4
-      # Mark for tsv
-      # fluidRow(
-      #   column(3, textInput("gene_col", "Gene column:", "segex", width = "100%")),
-      #   column(3, textInput("ratio_col", "Ratio column:", "ratio", width = "100%")),
-      #   column(3, textInput("fc_col", "Fold-change column:", "fc", width = "100%")),
-      #   column(3, textInput("pval_col", "P-value column:", "pvalue_1", width = "100%"))
-      # ),
-      # hr(),
       # Method + Species - same row, 1/4 each
       fluidRow(
         column(3,
@@ -1036,7 +1048,7 @@ server <- function(input, output, session) {
         )
       ),
       hr(),
-      # DB selection - full row, initially hidden
+      # DB selection - full row
       div(
         id = "db_container",
         class = "wrap-selected",  
@@ -1064,50 +1076,50 @@ server <- function(input, output, session) {
     species <- input$species
     if(species == "Homo sapiens"){
       db_choices <- c(
-        "Positional (C1) — Gene sets grouped by chromosomal location. Useful for detecting genomic region-level effects (e.g., CNV or structural variation)." = "Positional",
-        "CGP (C2, CGP) — Chemical and Genetic Perturbation gene sets. Useful for functional perturbation studies." = "CGP",
-        "CP (C2, CP) — Canonical pathways. Generic CP collection including small curated pathways." = "CP",
-        "BioCarta (C2, CP:BIOCARTA) — Curated signaling pathways (legacy resource). Smaller and less frequently updated, but useful for classical signaling interpretation." = "BioCarta",
-        "KEGG_LEGACY (C2, CP:KEGG_LEGACY) — KEGG legacy pathways. Older version of KEGG; included for backward compatibility." = "KEGG_LEGACY",
-        "KEGG (C2, CP:KEGG_MEDICUS) — Curated metabolic and signaling pathways from KEGG. Focuses on canonical biochemical pathways, including metabolism, disease pathways, and drug interactions." = "KEGG",
-        "PID (C2, CP:PID) — Pathway Interaction Database. Focuses on signaling interactions and regulatory pathways. Useful for studying signaling networks." = "PID",
-        "Reactome (C2, CP:REACTOME) — Expert-curated pathways with detailed reaction-level information. Well-structured and less redundant than GO; highly suitable for pathway-level interpretation." = "Reactome",
-        "WikiPathways (C2, CP:WIKIPATHWAYS) — Curated signaling pathways from the WikiPathways database." = "WikiPathways",
-        "CP_CUSTOM (C2) — Custom curated canonical pathways. Includes various pathway collections not classified into standard subcategories." = "CP_CUSTOM",
-        "Motif_miR (C3, MIR:MIRDB) — microRNA target gene sets predicted from databases. Useful for studying post-transcriptional regulation." = "Motif_miR",
+        "Positional (C1) — Gene sets grouped by chromosomal location." = "Positional",
+        "CGP (C2, CGP) — Chemical and Genetic Perturbation gene sets." = "CGP",
+        "CP (C2, CP) — Canonical pathways." = "CP",
+        "BioCarta (C2, CP:BIOCARTA) — Curated signaling pathways." = "BioCarta",
+        "KEGG_LEGACY (C2, CP:KEGG_LEGACY) — KEGG legacy pathways." = "KEGG_LEGACY",
+        "KEGG (C2, CP:KEGG_MEDICUS) — Curated metabolic and signaling pathways." = "KEGG",
+        "PID (C2, CP:PID) — Pathway Interaction Database." = "PID",
+        "Reactome (C2, CP:REACTOME) — Expert-curated pathways." = "Reactome",
+        "WikiPathways (C2, CP:WIKIPATHWAYS) — Curated signaling pathways." = "WikiPathways",
+        "CP_CUSTOM (C2) — Custom curated canonical pathways." = "CP_CUSTOM",
+        "Motif_miR (C3, MIR:MIRDB) — microRNA target gene sets." = "Motif_miR",
         "Motif_miR_Legacy (C3, MIR:MIR_LEGACY) — Legacy microRNA target gene sets." = "Motif_miR_Legacy",
-        "Motif_TF (C3, TFT:GTRD) — Transcription factor target gene sets based on motif analysis and ChIP-seq data. Useful for identifying upstream regulatory TFs." = "Motif_TF",
-        "Motif_TF_Legacy (C3, TFT:TFT_LEGACY) — Legacy transcription factor target gene sets." = "Motif_TF_Legacy",
-        "Computational (C4) — Gene sets derived from computational analyses such as co-expression or cancer modules. Less curated; suitable for exploratory analysis." = "Computational",
-        "GO_BP (C5, GO:BP) — Biological Process ontology. Covers gene sets representing biological processes such as cell cycle, apoptosis, metabolism, and signaling pathways. Highly comprehensive and recommended for general functional enrichment." = "GO_BP",
-        "GO_CC (C5, GO:CC) — Cellular Component ontology. Represents subcellular localization such as nucleus, mitochondria, ribosome. Helpful for identifying where gene products function in the cell." = "GO_CC",
-        "GO_MF (C5, GO:MF) — Molecular Function ontology. Describes gene products in terms of biochemical activity (e.g., enzyme activity, binding functions). Useful for mechanistic insights at the molecular level." = "GO_MF",
-        "HPO (C5, HPO) — Human Phenotype Ontology. Captures phenotypic abnormalities and disease-related phenotypes. Useful for disease association studies." = "HPO",
-        "Oncogenic (C6) — Gene signatures derived from cancer studies, representing oncogenic pathway activation or suppression. Ideal for cancer-related datasets." = "Oncogenic",
-        "Immune (C7, IMMUNESIGDB) — Immunologic gene sets derived from immune cell types, conditions, and perturbations. Recommended for immune-related or inflammation studies." = "Immune",
-        "VAX (C7, VAX) — Gene sets related to vaccine responses (HIPC). Useful for immunology and vaccine studies." = "VAX",
-        "Hallmark (H) — Well-curated, non-redundant gene sets summarizing core biological states (e.g., EMT, hypoxia, apoptosis). Strongly recommended for robust and interpretable results." = "Hallmark"
+        "Motif_TF (C3, TFT:GTRD) — Transcription factor target gene sets." = "Motif_TF",
+        "Motif_TF_Legacy (C3, TFT:TFT_LEGACY) — Legacy transcription factor target sets." = "Motif_TF_Legacy",
+        "Computational (C4) — Computational gene sets." = "Computational",
+        "GO_BP (C5, GO:BP) — Biological Process ontology." = "GO_BP",
+        "GO_CC (C5, GO:CC) — Cellular Component ontology." = "GO_CC",
+        "GO_MF (C5, GO:MF) — Molecular Function ontology." = "GO_MF",
+        "HPO (C5, HPO) — Human Phenotype Ontology." = "HPO",
+        "Oncogenic (C6) — Oncogenic signatures." = "Oncogenic",
+        "Immune (C7, IMMUNESIGDB) — Immunologic gene sets." = "Immune",
+        "VAX (C7, VAX) — Vaccine response gene sets." = "VAX",
+        "Hallmark (H) — Hallmark gene sets." = "Hallmark"
       )
     } 
     else {db_choices <- c(
-        "Positional (M1) — Gene sets grouped by genomic location." = "Positional",
-        "CGP (M2, CGP) — Chemical and Genetic Perturbation gene sets for mouse. Useful for functional perturbation studies." = "CGP",
-        "BioCarta (M2, CP:BIOCARTA) — Classical signaling pathways. Limited size but still useful for canonical pathway interpretation." = "BioCarta",
-        "Reactome (M2, CP:REACTOME) — Curated pathway database with detailed molecular interactions. Reliable and less redundant than GO." = "Reactome",
-        "WikiPathways (M2, CP:WIKIPATHWAYS) — Curated signaling pathways from the WikiPathways database." = "WikiPathways",
-        "Motif_TF (M3, GTRD) — Transcription factor target gene sets derived from motif and ChIP-based evidence." = "Motif_TF",
-        "Motif_miR (M3, MIRDB) — microRNA target predictions for mouse genes." = "Motif_miR",
-        "GO_BP (M5, GO:BP) — Biological Process ontology for mouse. Covers diverse biological processes such as development, immune response, and metabolism. Highly comprehensive and recommended for general analysis." = "GO_BP",
-        "GO_CC (M5, GO:CC) — Cellular Component ontology. Defines subcellular localization of gene products." = "GO_CC",
-        "GO_MF (M5, GO:MF) — Molecular Function ontology. Describes biochemical activities such as catalytic or binding functions." = "GO_MF",
-        "MP Tumor (M5, MPT) — Mouse phenotype gene sets related to tumor models." = "MP_Tumor",
-        "Immune (M7) — Immunologic gene sets capturing immune cell states and perturbations. Recommended for immune system studies." = "Immune",
-        "Hallmark (MH) — Mouse-adapted hallmark gene sets. Reduced redundancy and strong interpretability. Recommended." = "Hallmark"
-      )
+      "Positional (M1) — Gene sets grouped by genomic location." = "Positional",
+      "CGP (M2, CGP) — Chemical and Genetic Perturbation gene sets." = "CGP",
+      "BioCarta (M2, CP:BIOCARTA) — Classical signaling pathways." = "BioCarta",
+      "Reactome (M2, CP:REACTOME) — Curated pathway database." = "Reactome",
+      "WikiPathways (M2, CP:WIKIPATHWAYS) — Curated signaling pathways." = "WikiPathways",
+      "Motif_TF (M3, GTRD) — Transcription factor target gene sets." = "Motif_TF",
+      "Motif_miR (M3, MIRDB) — microRNA target predictions." = "Motif_miR",
+      "GO_BP (M5, GO:BP) — Biological Process ontology." = "GO_BP",
+      "GO_CC (M5, GO:CC) — Cellular Component ontology." = "GO_CC",
+      "GO_MF (M5, GO:MF) — Molecular Function ontology." = "GO_MF",
+      "MP Tumor (M5, MPT) — Mouse phenotype tumor gene sets." = "MP_Tumor",
+      "Immune (M7) — Immunologic gene sets." = "Immune",
+      "Hallmark (MH) — Mouse hallmark gene sets." = "Hallmark"
+    )
     }
     
     updateSelectInput(session, "gsea_db", choices = db_choices, selected = c("GO_BP", "Reactome", "Hallmark"))
-
+    
   })
   
   # ----------------- Visualization UI -----------------
@@ -1122,27 +1134,26 @@ server <- function(input, output, session) {
            "gsea_nes" = uiOutput("gsea_nes_ui")
     )
   })
+  
   output$violin_ui <- renderUI({
     tagList(
       h4("Seurat RDS Obj:"),
       path_input_ui(
-      id = "data",
-      label = "Seurat File Path",
-      placeholder = "/path/to/seurat_file.rds",
-      reactive_obj = data_obj
-    ),
-    h4("DEG result (Optional):"),
-    path_input_ui(
-      id = "deg",
-      label = "DEG File Path (.tsv)",
-      placeholder = "/path/to/deg_result.tsv",
-      reactive_obj = deg_obj
-    ),
-    fluidRow(
-      column(6, actionButton("marker_select_btn", "Select Marker", class = "btn-success", width = "100%")),
-      column(6, actionButton("sample_ident_select_btn", "Select Sample Identification", class = "btn-primary", width = "100%"))
-    ))
-
+        id = "data",
+        label = "Seurat File Path",
+        placeholder = "/path/to/seurat_file.rds",
+        value = rv$data_obj_path),
+      h4("DEG result (Optional):"),
+      path_input_ui(
+        id = "deg",
+        label = "DEG File Path (.tsv)",
+        placeholder = "/path/to/deg_result.tsv",
+        value = rv$deg_obj_path),
+      fluidRow(
+        column(6, actionButton("marker_select_btn", "Select Marker", class = "btn-success", width = "100%")),
+        column(6, actionButton("sample_ident_select_btn", "Select Sample Identification", class = "btn-primary", width = "100%"))
+      ))
+    
   })
   
   output$dotplot_ui <- renderUI({
@@ -1152,15 +1163,13 @@ server <- function(input, output, session) {
         id = "data",
         label = "Seurat File Path",
         placeholder = "/path/to/seurat_file.rds",
-        reactive_obj = data_obj
-      ),
+        value = rv$data_obj_path),
       h4("DEG result (Optional):"),
       path_input_ui(
         id = "deg",
         label = "DEG File Path (.tsv)",
         placeholder = "/path/to/deg_result.tsv",
-        reactive_obj = deg_obj
-      ),
+        value = rv$deg_obj_path),
       fluidRow(
         column(6, actionButton("marker_select_btn", "Select Marker", class = "btn-success", width = "100%")),
         column(6, actionButton("sample_ident_select_btn", "Select Sample Identification", class = "btn-primary", width = "100%"))
@@ -1174,10 +1183,9 @@ server <- function(input, output, session) {
         id = "deg",
         label = "DEG File Path (.tsv)",
         placeholder = "/path/to/deg_result.tsv",
-        reactive_obj = deg_obj
-      ),
+        value = rv$deg_obj_path),
       actionButton("marker_select_btn", "Select Marker", class = "btn-success", width = "100%")
-      )
+    )
   })
   
   output$pathway_volcano_ui <- renderUI({
@@ -1187,15 +1195,13 @@ server <- function(input, output, session) {
         id = "deg",
         label = "DEG File Path (.tsv)",
         placeholder = "/path/to/deg_result.tsv",
-        reactive_obj = deg_obj
-      ),
+        value = rv$deg_obj_path),
       h4("GSEA result:"),
       path_input_ui(
         id = "gsea",
         label = "GSEA File Path (.xlsx)",
         placeholder = "/path/to/gsea_file.xlsx",
-        reactive_obj = gsea_obj
-      ),
+        value = rv$gsea_obj_path),
       actionButton("pathway_select_btn", "Select Pathway", class = "btn-warning", width = "100%"))
   })
   
@@ -1206,18 +1212,29 @@ server <- function(input, output, session) {
         id = "gsea",
         label = "GSEA File Path (.xlsx)",
         placeholder = "/path/to/gsea_file.xlsx",
-        reactive_obj = gsea_obj
-      ),
+        value = rv$gsea_obj_path),
       actionButton("pathway_select_btn", "Select Pathway", class = "btn-warning", width = "100%"))
   })
-
+  
   # ----------------- DEG FUNCTION -----------------
   
-  # DEG/Visualization reset input seurat data
-  observeEvent(input$reset_data_obj_btn,{
-    data_obj(NULL)
+  # Reset handlers
+  observeEvent(input$reset_data_obj_btn, {
+    rv$data_obj <- NULL
+    rv$data_obj_path <- NULL
   })
-  # DEG window 1
+  
+  observeEvent(input$reset_deg_obj_btn, {
+    rv$deg_obj <- NULL
+    rv$deg_obj_path <- NULL
+  })
+  
+  observeEvent(input$reset_gsea_obj_btn, {
+    rv$gsea_obj <- NULL
+    rv$gsea_obj_path <- NULL
+  })
+  
+  # DEG window 1 - Analysis Summary
   observeEvent(input$analysis_summary, {
     sample_cards_data <- step2_data$sample_cards_data()
     cluster_cards_data <- step2_data$cluster_cards_data()
@@ -1289,7 +1306,7 @@ server <- function(input, output, session) {
     )
   })
   
-  # DEG window 2
+  # DEG window 2 - Save Directory
   observeEvent(input$confirm_summary, {
     removeModal()  
     
@@ -1330,7 +1347,7 @@ server <- function(input, output, session) {
     })
   })
   
-  # DEG analysi window
+  # DEG analysis execution
   observeEvent(input$start_deg, {
     source("/projectnb/wax-es/00_shinyapp/DEG/DEG/DE_analysis.R")
     save_path <- input$save_path
@@ -1390,7 +1407,7 @@ server <- function(input, output, session) {
     write.table(de_config_validated, file = file_path, sep = "\t", row.names = FALSE, quote = FALSE)
     sample_column <- input$sample_column
     cluster_column <- input$cluster_column
-    seurat_obj <- data_obj()
+    seurat_obj <- rv$data_obj
     n <- nrow(de_config_validated)
     showModal(modalDialog(
       title = "DE Analysis in Progress",
@@ -1412,13 +1429,13 @@ server <- function(input, output, session) {
           sample_column,
           cluster_column
         )
-
+        
         write_tsv(res_list$segex_output, file.path(save_path, res_list$segex_filename), col_names = TRUE)
         
         incProgress(1/n, detail = paste("Processing comparison", i, "of", n))
       }
     })
-
+    
     showModal(modalDialog(
       title = "DEG Analysis Completed",
       tagList(
@@ -1433,7 +1450,7 @@ server <- function(input, output, session) {
   
   # ----------------- GSEA FUNCTION -----------------
   
-  # GSEA window 1
+  # GSEA window 1 - Preview
   observeEvent(input$preview_gsea, {
     
     file_path <- input$gsea_file
@@ -1472,11 +1489,6 @@ server <- function(input, output, session) {
           tags$b("Parameters:"),
           tags$ul(
             tags$li(paste("Species:", input$species)),
-            # Mark for tsv
-            # tags$li(paste("Gene column:", input$gene_col)),
-            # tags$li(paste("Ratio column:", input$ratio_col)),
-            # tags$li(paste("FC column:", input$fc_col)),
-            # tags$li(paste("P-value column:", input$pval_col)),
             tags$li(paste("Method:", input$gsea_method)),
             tags$li(paste("DB:", paste(input$gsea_db, collapse = ", ")))
           )
@@ -1490,7 +1502,7 @@ server <- function(input, output, session) {
     ))
   })
   
-  # GSEA window 2
+  # GSEA window 2 - Output path
   observeEvent(input$confirm_gsea, {
     
     showModal(modalDialog(
@@ -1506,6 +1518,7 @@ server <- function(input, output, session) {
       )
     ))
   })
+  
   output$path_status_gsea <- renderUI({
     
     path <- input$output_path_gsea
@@ -1528,7 +1541,7 @@ server <- function(input, output, session) {
     
   })
   
-  # GSEA analysi window
+  # GSEA analysis execution
   observeEvent(input$start_gsea, {
     
     req(input$output_path_gsea)
@@ -1576,11 +1589,6 @@ server <- function(input, output, session) {
       gsea_res <- gsea_analysis_from_tsv(
         file_path = file,
         species = input$species[1],
-        #Mark for tsv
-        # gene_col = input$gene_col,
-        # ratio_col = input$ratio_col,
-        # fc_col = input$fc_col,
-        # pval_col = input$pval_col,
         method = input$gsea_method,
         db = input$gsea_db
       )
@@ -1611,15 +1619,8 @@ server <- function(input, output, session) {
       type = "message", duration = 10, closeButton = TRUE
     )
   })
-
-  # ----------------- VISUALIZATION FUNCTION -----------------
-  observeEvent(input$reset_tsv_obj_btn,{
-    deg_obj(NULL)
-  })
   
-  observeEvent(input$reset_gsea_obj_btn,{
-    gsea_obj(NULL)
-  })
+  # ----------------- VISUALIZATION FUNCTION Marker Select -----------------
   
   observeEvent(input$marker_select_btn, {
     showModal(
@@ -1634,36 +1635,143 @@ server <- function(input, output, session) {
             textAreaInput(
               inputId = "marker_text",
               label = "Current Marker:",
-              value = visualization_marker(),
+              value = rv$visualization_marker,
               rows = 20,
-              placeholder = "Paste genes here:\nGene_A\nGene_B\nGene_C"
+              placeholder = "Paste genes here:\nGene_A\nGene_B\nGene_C",
+              width = "100%"
             ),
-            
-            br(),
-            
             actionButton(
               "clear_marker",
               "Clear All Markers",
-              class = "btn-danger"  
+              class = "btn-danger",
+              width = "100%"
             )
           ),
-          
           column(
             width = 6,
-            "Right panel (TODO)"
-          )
-        )
-      )
+            tagList(
+            # --- Marker count ---
+              tags$div(
+                style = "margin-bottom: 10px; display: flex; align-items: center; gap: 6px;",
+                tags$span("Current Number of Marker:"),
+                tags$span(
+                  style = "color: red; font-weight: bold;",
+                  textOutput("marker_count")
+                )
+              ),
+            # =========================
+            # CASE 1: DEG NOT AVAILABLE
+            # =========================
+            conditionalPanel(
+              condition = "output.deg_available == false",
+              
+              tags$div(
+                style = "padding: 15px; color: #777;",
+                tags$h5("DEG not loaded"),
+                tags$p("Upload DEG file to enable advanced marker selection.")
+              )
+            ),
+            
+            # =========================
+            # CASE 2: DEG AVAILABLE
+            # =========================
+            conditionalPanel(
+              condition = "output.deg_available == true",
+              
+              # --- DEG button ---
+              actionButton(
+                "use_deg_marker_btn",
+                "Use DEG file to search marker",
+                class = "btn btn-primary",
+                width = "100%"
+              ),
+              
+              tags$hr(),
+              
+              # =========================
+              # 1. Top N markers
+              # =========================
+              fluidRow(
+                column(
+                  width = 8,
+                  numericInput(
+                    "top_n_pvalue",
+                    "Top N (smallest p-value):",
+                    value = 50,
+                    min = 1
+                  )
+                ),
+                column(
+                  width = 4,
+                  br(),
+                  actionButton(
+                    "apply_top_n",
+                    "Apply",
+                    class = "btn btn-success",
+                    width = "100%"
+                  )
+                )
+              ),
+              
+              # =========================
+              # 2. Top % markers
+              # =========================
+              fluidRow(
+                column(
+                  width = 8,
+                  numericInput(
+                    "top_pct_pvalue",
+                    "Top % (smallest p-value):",
+                    value = 10,
+                    min = 1,
+                    max = 100
+                  )
+                ),
+                column(
+                  width = 4,
+                  br(),
+                  actionButton(
+                    "apply_top_pct",
+                    "Apply",
+                    class = "btn btn-success",
+                    width = "100%"
+                  )
+                )
+              ),
+              
+              # =========================
+              # 3. pvalue threshold
+              # =========================
+              fluidRow(
+                column(
+                  width = 8,
+                  numericInput(
+                    "pvalue_threshold",
+                    "p-value < threshold:",
+                    value = 0.05,
+                    min = 0,
+                    step = 0.001
+                  )
+                ),
+                column(
+                  width = 4,
+                  br(),
+                  actionButton(
+                    "apply_pvalue",
+                    "Apply",
+                    class = "btn btn-success",
+                    width = "100%"
+                  ))))))),
+      footer = modalButton("Close"))
     )
   })
   
   observeEvent(input$marker_text, {
-    visualization_marker(input$marker_text)
+    rv$visualization_marker <- input$marker_text
   }, ignoreInit = TRUE)
   
   observeEvent(input$clear_marker, {
-    
-    visualization_marker(NULL)
+    rv$visualization_marker <- ""
     
     updateTextAreaInput(
       session,
@@ -1671,6 +1779,299 @@ server <- function(input, output, session) {
       value = ""
     )
   })
+  
+  output$deg_available <- reactive({
+    !is.null(rv$deg_obj)
+  })
+  outputOptions(output, "deg_available", suspendWhenHidden = FALSE)
+  
+  output$marker_count <- renderText({
+    if (is.null(rv$visualization_marker) || rv$visualization_marker == "") {
+      return(0)
+    }
+    length(strsplit(rv$visualization_marker, "\n")[[1]])
+  })
+  # p value select method
+  # top p vlaue select
+  observeEvent(input$apply_top_n, {
+    req(rv$deg_obj)
+    
+    df <- rv$deg_obj
+    
+    df2 <- df[order(df$pvalue_1), ]
+    df2 <- head(df2, input$top_n_pvalue)
+    
+    rv$visualization_marker <- paste(df2$segex, collapse = "\n")
+    
+    updateTextAreaInput(session, "marker_text", value = rv$visualization_marker)
+  })
+  # pct select
+  observeEvent(input$apply_top_pct, {
+    req(rv$deg_obj)
+    df <- rv$deg_obj
+    df <- df[order(df$pvalue_1), ]
+    n <- ceiling(nrow(df) * input$top_pct_pvalue / 100)
+    df2 <- head(df, n)
+    rv$visualization_marker <- paste(df2$segex, collapse = "\n")
+    updateTextAreaInput(session, "marker_text", value = rv$visualization_marker)
+  })
+  # less than p value selct
+  observeEvent(input$apply_pvalue, {
+    req(rv$deg_obj)
+    
+    df <- rv$deg_obj
+    
+    df2 <- df[df$pvalue_1 < input$pvalue_threshold, ]
+    
+    rv$visualization_marker <- paste(df2$segex, collapse = "\n")
+    
+    updateTextAreaInput(session, "marker_text", value = rv$visualization_marker)
+  })
+  
+  # select marker on deg file
+  observeEvent(input$use_deg_marker_btn, {
+    library(DT)
+    req(rv$deg_obj)
+    
+    showModal(
+      modalDialog(
+        title = "Select Markers from DEG",
+        size = "l",
+        easyClose = FALSE,
+        
+        DT::DTOutput("deg_table"),
+        
+        footer = tagList(
+          actionButton(
+            "confirm_deg_marker",
+            "Confirm Selection",
+            class = "btn btn-primary"
+          ),
+          modalButton("Cancel")
+        )
+      )
+    )
+  })
+  
+  output$deg_table <- DT::renderDT({
+    
+    req(rv$deg_obj)
+    
+    df <- rv$deg_obj
+    df_display <- df
+    
+    num_cols <- sapply(df, is.numeric)
+    
+    df_display[num_cols] <- lapply(df_display[num_cols], function(x) {
+      round(x, 2)
+    })
+    
+    # ---- Get current marker genes safely ----
+    marker_genes <- character(0)
+    
+    if (!is.null(rv$visualization_marker) && rv$visualization_marker != "") {
+      marker_genes <- unlist(strsplit(rv$visualization_marker, "\n"))
+      marker_genes <- trimws(marker_genes)
+    }
+    
+    # ---- Only keep genes that exist in DEG table ----
+    valid_idx <- which(df$segex %in% marker_genes)
+    
+    DT::datatable(
+      df_display,
+      class = "compact",
+      # ---- Preselect valid rows ----
+      selection = list(
+        mode = "multiple",
+        selected = valid_idx
+      ),
+      
+      filter = "top",
+      
+      options = list(
+        pageLength = 15,
+        
+        lengthMenu = list(
+          c(10, 15, 20, 30, 50),   
+          c("10", "15", "20", "30", "50")  
+        ),
+        
+        scrollX = TRUE
+      )
+    )
+  })
+  
+  get_selected_genes <- function() {
+    
+    req(rv$deg_obj)
+    
+    sel_idx <- input$deg_table_rows_selected
+    
+    if (is.null(sel_idx) || length(sel_idx) == 0) {
+      return(character(0))
+    }
+    
+    rv$deg_obj$segex[sel_idx]
   }
+  
+  observeEvent(input$confirm_deg_marker, {
+    
+    genes <- get_selected_genes()
+    
+    # ---- Update reactive value ----
+    rv$visualization_marker <- paste(genes, collapse = "\n")
+    
+    # ---- Sync back to textarea ----
+    updateTextAreaInput(
+      session,
+      "marker_text",
+      value = rv$visualization_marker
+    )
+    
+    showModal(
+      modalDialog(
+        title = "Marker Selection",
+        size = "l",
+        easyClose = TRUE,
+        
+        fluidRow(
+          column(
+            width = 6,
+            textAreaInput(
+              inputId = "marker_text",
+              label = "Current Marker:",
+              value = rv$visualization_marker,
+              rows = 20,
+              placeholder = "Paste genes here:\nGene_A\nGene_B\nGene_C",
+              width = "100%"
+            ),
+            actionButton(
+              "clear_marker",
+              "Clear All Markers",
+              class = "btn-danger",
+              width = "100%"
+            )
+          ),
+          column(
+            width = 6,
+            tagList(
+              # --- Marker count ---
+              tags$div(
+                style = "margin-bottom: 10px; display: flex; align-items: center; gap: 6px;",
+                tags$span("Current Number of Marker:"),
+                tags$span(
+                  style = "color: red; font-weight: bold;",
+                  textOutput("marker_count")
+                )
+              ),
+              # =========================
+              # CASE 1: DEG NOT AVAILABLE
+              # =========================
+              conditionalPanel(
+                condition = "output.deg_available == false",
+                
+                tags$div(
+                  style = "padding: 15px; color: #777;",
+                  tags$h5("DEG not loaded"),
+                  tags$p("Upload DEG file to enable advanced marker selection.")
+                )
+              ),
+              
+              # =========================
+              # CASE 2: DEG AVAILABLE
+              # =========================
+              conditionalPanel(
+                condition = "output.deg_available == true",
+                
+                # --- DEG button ---
+                actionButton(
+                  "use_deg_marker_btn",
+                  "Use DEG file to search marker",
+                  class = "btn btn-primary",
+                  width = "100%"
+                ),
+                
+                tags$hr(),
+                
+                # =========================
+                # 1. Top N markers
+                # =========================
+                fluidRow(
+                  column(
+                    width = 8,
+                    numericInput(
+                      "top_n_pvalue",
+                      "Top N (smallest p-value):",
+                      value = 50,
+                      min = 1
+                    )
+                  ),
+                  column(
+                    width = 4,
+                    br(),
+                    actionButton(
+                      "apply_top_n",
+                      "Apply",
+                      class = "btn btn-success",
+                      width = "100%"
+                    )
+                  )
+                ),
+                
+                # =========================
+                # 2. Top % markers
+                # =========================
+                fluidRow(
+                  column(
+                    width = 8,
+                    numericInput(
+                      "top_pct_pvalue",
+                      "Top % (smallest p-value):",
+                      value = 10,
+                      min = 1,
+                      max = 100
+                    )
+                  ),
+                  column(
+                    width = 4,
+                    br(),
+                    actionButton(
+                      "apply_top_pct",
+                      "Apply",
+                      class = "btn btn-success",
+                      width = "100%"
+                    )
+                  )
+                ),
+                
+                # =========================
+                # 3. pvalue threshold
+                # =========================
+                fluidRow(
+                  column(
+                    width = 8,
+                    numericInput(
+                      "pvalue_threshold",
+                      "p-value < threshold:",
+                      value = 0.05,
+                      min = 0,
+                      step = 0.001
+                    )
+                  ),
+                  column(
+                    width = 4,
+                    br(),
+                    actionButton(
+                      "apply_pvalue",
+                      "Apply",
+                      class = "btn btn-success",
+                      width = "100%"
+                    ))))))),
+        footer = modalButton("Close"))
+    )
+  })
+  
+  # ----------------- VISUALIZATION FUNCTION Sample Identification select -----------------
+}
 
 shinyApp(ui, server)
