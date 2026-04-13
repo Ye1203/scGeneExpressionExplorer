@@ -774,6 +774,7 @@ server <- function(input, output, session) {
   data_obj <- reactiveVal(NULL)
   deg_obj <- reactiveVal(NULL)
   gsea_obj <- reactiveVal(NULL)
+  visualization_marker <- reactiveVal(NULL)
   
   # ----------------- Load Data -----------------
   
@@ -1021,7 +1022,7 @@ server <- function(input, output, session) {
                  "gsea_method",
                  "Ranking method:",
                  choices = c("fc-pvalue","log2fc-pvalue","log2fc","fc"),
-                 selected = "fc-pvalue",
+                 selected = "fc",
                  width = "100%"
                )
         ),
@@ -1136,7 +1137,12 @@ server <- function(input, output, session) {
       label = "DEG File Path (.tsv)",
       placeholder = "/path/to/deg_result.tsv",
       reactive_obj = deg_obj
+    ),
+    fluidRow(
+      column(6, actionButton("marker_select_btn", "Select Marker", class = "btn-success", width = "100%")),
+      column(6, actionButton("sample_ident_select_btn", "Select Sample Identification", class = "btn-primary", width = "100%"))
     ))
+
   })
   
   output$dotplot_ui <- renderUI({
@@ -1154,6 +1160,10 @@ server <- function(input, output, session) {
         label = "DEG File Path (.tsv)",
         placeholder = "/path/to/deg_result.tsv",
         reactive_obj = deg_obj
+      ),
+      fluidRow(
+        column(6, actionButton("marker_select_btn", "Select Marker", class = "btn-success", width = "100%")),
+        column(6, actionButton("sample_ident_select_btn", "Select Sample Identification", class = "btn-primary", width = "100%"))
       ))
   })
   
@@ -1165,7 +1175,9 @@ server <- function(input, output, session) {
         label = "DEG File Path (.tsv)",
         placeholder = "/path/to/deg_result.tsv",
         reactive_obj = deg_obj
-      ))
+      ),
+      actionButton("marker_select_btn", "Select Marker", class = "btn-success", width = "100%")
+      )
   })
   
   output$pathway_volcano_ui <- renderUI({
@@ -1183,7 +1195,8 @@ server <- function(input, output, session) {
         label = "GSEA File Path (.xlsx)",
         placeholder = "/path/to/gsea_file.xlsx",
         reactive_obj = gsea_obj
-      ))
+      ),
+      actionButton("pathway_select_btn", "Select Pathway", class = "btn-warning", width = "100%"))
   })
   
   output$gsea_nes_ui <- renderUI({
@@ -1194,7 +1207,8 @@ server <- function(input, output, session) {
         label = "GSEA File Path (.xlsx)",
         placeholder = "/path/to/gsea_file.xlsx",
         reactive_obj = gsea_obj
-      ))
+      ),
+      actionButton("pathway_select_btn", "Select Pathway", class = "btn-warning", width = "100%"))
   })
 
   # ----------------- DEG FUNCTION -----------------
@@ -1605,6 +1619,57 @@ server <- function(input, output, session) {
   
   observeEvent(input$reset_gsea_obj_btn,{
     gsea_obj(NULL)
+  })
+  
+  observeEvent(input$marker_select_btn, {
+    showModal(
+      modalDialog(
+        title = "Marker Selection",
+        size = "l",
+        easyClose = TRUE,
+        
+        fluidRow(
+          column(
+            width = 6,
+            textAreaInput(
+              inputId = "marker_text",
+              label = "Current Marker:",
+              value = visualization_marker(),
+              rows = 20,
+              placeholder = "Paste genes here:\nGene_A\nGene_B\nGene_C"
+            ),
+            
+            br(),
+            
+            actionButton(
+              "clear_marker",
+              "Clear All Markers",
+              class = "btn-danger"  
+            )
+          ),
+          
+          column(
+            width = 6,
+            "Right panel (TODO)"
+          )
+        )
+      )
+    )
+  })
+  
+  observeEvent(input$marker_text, {
+    visualization_marker(input$marker_text)
+  }, ignoreInit = TRUE)
+  
+  observeEvent(input$clear_marker, {
+    
+    visualization_marker(NULL)
+    
+    updateTextAreaInput(
+      session,
+      "marker_text",
+      value = ""
+    )
   })
   }
 

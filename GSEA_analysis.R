@@ -11,7 +11,7 @@ gsea_analysis_from_tsv <- function(file_path,
                               ratio_col = "ratio",
                               fc_col = "fc",
                               pval_col = "pvalue_1",
-                              method = "fc-pvalue",  # "log2fc-pvalue", "log2fc", "fc"
+                              method = "fc",  # "log2fc-pvalue", "log2fc", ""，fc-pvalue
                               db = c("GO_BP", "Reactome", "Hallmark")) {
   
   library(clusterProfiler)
