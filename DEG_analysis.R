@@ -781,7 +781,9 @@ server <- function(input, output, session) {
     gsea_obj = NULL,
     gsea_path = NULL,
     
-    visualization_marker = ""
+    visualization_marker = "",
+    
+    visualization_sample_column = ""
   )
   
   # ----------------- Load Data -----------------
@@ -1152,7 +1154,9 @@ server <- function(input, output, session) {
       fluidRow(
         column(6, actionButton("marker_select_btn", "Select Marker", class = "btn-success", width = "100%")),
         column(6, actionButton("sample_ident_select_btn", "Select Sample Identification", class = "btn-primary", width = "100%"))
-      ))
+      ),
+      br(),
+      uiOutput("violin_plot_tabs_ui"))
     
   })
   
@@ -1216,6 +1220,30 @@ server <- function(input, output, session) {
       actionButton("pathway_select_btn", "Select Pathway", class = "btn-warning", width = "100%"))
   })
   
+  # Violin plot UI
+  output$violin_plot_tabs_ui <- renderUI({
+    
+    if (is.null(rv$data_obj)) {
+      
+      tagList(
+        div(
+          style = "padding: 15px; background-color: #fff3cd; border: 1px solid #ffeeba; border-radius: 5px;",
+          "Violin plot requires a loaded Seurat RDS object. Please load data first."
+        )
+      )
+      
+    } else {
+      
+      tabsetPanel(
+        tabPanel("Original Violin Plot", uiOutput("original_violin_ui")),
+        tabPanel("Stack Violin Plot", uiOutput("stack_violin_ui"))
+      )
+      
+    }
+  })
+  
+  output$original_violin_ui <- renderUI({})
+  output$stack_violin_ui <- renderUI({})
   # ----------------- DEG FUNCTION -----------------
   
   # Reset handlers
@@ -2072,6 +2100,100 @@ server <- function(input, output, session) {
   })
   
   # ----------------- VISUALIZATION FUNCTION Sample Identification select -----------------
+  observeEvent(input$sample_ident_select_btn, {
+    
+    # ========== 1. data_obj 为空 ==========
+    if (is.null(rv$data_obj)) {
+      
+      showModal(modalDialog(
+        title = "sample identification select",
+        "Please load a Seurat RDS obj to select sample identification",
+        easyClose = TRUE,
+        footer = modalButton("Close")
+      ))
+      
+      return()
+    }
+    
+    meta_cols <- colnames(rv$data_obj@meta.data)
+    
+    meta_df <- rv$data_obj@meta.data
+    valid_cols <- meta_cols[
+      sapply(meta_df[, meta_cols, drop = FALSE], function(x) {
+        !is.numeric(x)
+      })
+    ]
+    
+    sample_cols <- c("", setdiff(valid_cols, c("CB", "CB_original")))
+    
+    if (is.null(rv$visualization_sample_column)) {
+      rv$visualization_sample_column <- ""
+    }
+    
+    showModal(modalDialog(
+      title = "sample identification select",
+      
+      tagList(
+        
+        # ====== select sample column ======
+        selectInput(
+          inputId = "sample_ident_col",
+          label   = "Sample identification column",
+          choices = sample_cols,
+          selected = rv$visualization_sample_column
+        ),
+        
+        # ====== UMAP plot（conditional UI）======
+        uiOutput("umap_in_modal_ui")
+      ),
+      
+      footer = tagList(
+        modalButton("Cancel"),
+        actionButton("confirm_sample_ident", "Confirm", class = "btn-primary")
+      ),
+      easyClose = FALSE
+    ))
+  })
+  
+  output$umap_in_modal_ui <- renderUI({
+    
+    req(input$sample_ident_col)
+    req(input$sample_ident_col != "")
+    
+    has_umap <- "umap" %in% names(rv$data_obj@reductions)
+    
+    if (!has_umap) {
+      return(tags$div("No UMAP found in this Seurat object"))
+    }
+    
+    tagList(
+      hr(),
+      plotOutput("umap_modal_plot", height = "400px")
+    )
+  })
+  
+  output$umap_modal_plot <- renderPlot({
+    
+    req(input$sample_ident_col)
+    req(input$sample_ident_col != "")
+    
+    req("umap" %in% names(rv$data_obj@reductions))
+    
+    DimPlot(
+      rv$data_obj,
+      reduction = "umap",
+      group.by  = input$sample_ident_col
+    )
+  })
+  
+  observeEvent(input$confirm_sample_ident, {
+    
+    req(rv$data_obj)
+    
+    rv$visualization_sample_column <- input$sample_ident_col
+    
+    removeModal()
+  })
 }
 
 shinyApp(ui, server)
