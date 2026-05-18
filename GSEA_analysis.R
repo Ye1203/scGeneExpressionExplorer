@@ -5,6 +5,24 @@
 # code to use `avg_log2FC` or `avg_log2FC * -10 * log(p-value)`.
 # --Bingtian write on Apr. 6th, 2026
 
+# In single-cell RNA-seq analysis without biological replicates, pre-ranked GSEA relies
+# primarily on gene ranking rather than formal statistical testing. Therefore, interpretation
+# should focus on the normalized enrichment score (NES), which reflects both the direction and
+# magnitude of pathway enrichment between conditions.
+# 
+# In contrast, p-values in this context are influenced by cell-level pseudo-replication, which
+# violates the assumption of independent samples. As a result, their statistical interpretation
+# is limited, and they should only be considered as a supplementary indicator of consistency or
+# robustness of the enrichment signal rather than as a primary measure of significance.
+# 
+# It is not recommended to describe results as “statistically significant enrichment (p < 0.05).”
+# Instead, interpretations should avoid over-reliance on p-values.
+# 
+# A preferred expression should emphasize NES, for example: “This pathway shows positive/negative
+# enrichment (NES > 0 / NES < 0), suggesting upregulation/downregulation under condition A.”
+# 
+# --Bingtian write on Apr. 21th, 2026
+
 gsea_analysis_from_tsv <- function(file_path,
                               species = "Mus musculus", # "Homo sapiens"
                               gene_col = "segex",
@@ -73,8 +91,22 @@ gsea_analysis_from_tsv <- function(file_path,
   })
   
   names(gsea_results) <- names(gene_sets)
+  gsea_results <- gsea_results[!sapply(gsea_results, is.null)]
   
-  gsea_results <- gsea_results[!sapply(gsea_results, is.null)] 
+  if (length(gsea_results) > 0) {
+    
+    combined_df <- dplyr::bind_rows(
+      lapply(names(gsea_results), function(db_name) {
+        df <- gsea_results[[db_name]]
+        if (!is.null(df) && nrow(df) > 0) {
+          df$database <- db_name
+          return(df)
+        }
+        return(NULL)
+      })
+    )
+    gsea_results <- c(list(ALL = combined_df), gsea_results)
+  }
   
   return(gsea_results)
   
@@ -88,44 +120,60 @@ get_gene_sets <- function(
   # Comprehensive db_map for MSigDB gene sets
   db_map <- list(
     HS = list(
-      Positional = list(category = "C1", subcategory = NULL),
-      CGP         = list(category = "C2", subcategory = "CGP"),
-      CP          = list(category = "C2", subcategory = "CP"),
-      BioCarta    = list(category = "C2", subcategory = "CP:BIOCARTA"),
-      KEGG_LEGACY = list(category = "C2", subcategory = "CP:KEGG_LEGACY"),
-      KEGG        = list(category = "C2", subcategory = "CP:KEGG_MEDICUS"),
-      PID         = list(category = "C2", subcategory = "CP:PID"),
-      Reactome    = list(category = "C2", subcategory = "CP:REACTOME"),
-      WikiPathways= list(category = "C2", subcategory = "CP:WIKIPATHWAYS"),
-      CP_CUSTOM   = list(category = "C2", subcategory = NULL),
-      Motif_miR  = list(category = "C3", subcategory = "MIR:MIRDB"),
-      Motif_miR_Legacy = list(category = "C3", subcategory = "MIR:MIR_LEGACY"),
-      Motif_TF   = list(category = "C3", subcategory = "TFT:GTRD"),
-      Motif_TF_Legacy = list(category = "C3", subcategory = "TFT:TFT_LEGACY"),
-      Computational = list(category = "C4", subcategory = NULL),
-      GO_BP      = list(category = "C5", subcategory = "GO:BP"),
-      GO_CC      = list(category = "C5", subcategory = "GO:CC"),
-      GO_MF      = list(category = "C5", subcategory = "GO:MF"),
-      HPO        = list(category = "C5", subcategory = "HPO"),
-      Oncogenic  = list(category = "C6", subcategory = NULL),
-      Immune     = list(category = "C7", subcategory = "IMMUNESIGDB"),
-      VAX        = list(category = "C7", subcategory = "VAX"),
-      Hallmark   = list(category = "H", subcategory = NULL)
+      `H(Hallmark)`              = list(category = "H",  subcategory = NULL),
+      
+      `C1(Positional)`           = list(category = "C1", subcategory = NULL),
+      
+      `C2(CGP)`                  = list(category = "C2", subcategory = "CGP"),
+      `C2(CP)`                   = list(category = "C2", subcategory = "CP"),
+      `C2(CP_BioCarta)`          = list(category = "C2", subcategory = "CP:BIOCARTA"),
+      `C2(CP_KEGG_LEGACY)`       = list(category = "C2", subcategory = "CP:KEGG_LEGACY"),
+      `C2(CP_KEGG_MEDICUS)`      = list(category = "C2", subcategory = "CP:KEGG_MEDICUS"),
+      `C2(CP_PID)`               = list(category = "C2", subcategory = "CP:PID"),
+      `C2(CP_Reactome)`          = list(category = "C2", subcategory = "CP:REACTOME"),
+      `C2(CP_WikiPathways)`      = list(category = "C2", subcategory = "CP:WIKIPATHWAYS"),
+      
+      `C3(MIR)`                  = list(category = "C3", subcategory = "MIR"),
+      `C3(MIR_MIRDB)`            = list(category = "C3", subcategory = "MIR:MIRDB"),
+      `C3(MIR_MIR_LEGACY)`       = list(category = "C3", subcategory = "MIR:MIR_LEGACY"),
+      `C3(TFT)`                  = list(category = "C3", subcategory = "TFT"),
+      `C3(TFT_GTRD)`             = list(category = "C3", subcategory = "TFT:GTRD"),
+      `C3(TFT_TFT_LEGACY)`       = list(category = "C3", subcategory = "TFT:TFT_LEGACY"),
+      
+      `C4(Computational)`        = list(category = "C4", subcategory = NULL),
+      `C4(3CA)`                  = list(category = "C4", subcategory = "3CA"),
+      `C4(CGN)`                  = list(category = "C4", subcategory = "CGN"),
+      `C4(CM)`                   = list(category = "C4", subcategory = "CM"),
+      
+      `C5(GO_BP)`                = list(category = "C5", subcategory = "GO:BP"),
+      `C5(GO_CC)`                = list(category = "C5", subcategory = "GO:CC"),
+      `C5(GO_MF)`                = list(category = "C5", subcategory = "GO:MF"),
+      `C5(HPO)`                  = list(category = "C5", subcategory = "HPO"),
+      
+      `C6(Oncogenic)`            = list(category = "C6", subcategory = NULL),
+      
+      `C7(ImmuneSigDB)`          = list(category = "C7", subcategory = "IMMUNESIGDB"),
+      `C7(VAX)`                  = list(category = "C7", subcategory = "VAX"),
+      
+      `C8(CellType)`             = list(category = "C8", subcategory = NULL),
+      
+      `C9(CompPerturb)`          = list(category = "C9", subcategory = NULL)
     ),
     MM = list(
-      Positional = list(category = "M1", subcategory = NULL),
-      CGP        = list(category = "M2", subcategory = "CGP"),
-      BioCarta   = list(category = "M2", subcategory = "CP:BIOCARTA"),
-      Reactome   = list(category = "M2", subcategory = "CP:REACTOME"),
-      WikiPathways = list(category = "M2", subcategory = "CP:WIKIPATHWAYS"),
-      Motif_TF  = list(category = "M3", subcategory = "GTRD"),
-      Motif_miR = list(category = "M3", subcategory = "MIRDB"),
-      GO_BP      = list(category = "M5", subcategory = "GO:BP"),
-      GO_CC      = list(category = "M5", subcategory = "GO:CC"),
-      GO_MF      = list(category = "M5", subcategory = "GO:MF"),
-      MP_Tumor   = list(category = "M5", subcategory = "MPT"),
-      Immune    = list(category = "M7", subcategory = NULL),
-      Hallmark  = list(category = "MH", subcategory = NULL)
+      `M1(Positional)`      = list(category = "M1", subcategory = NULL),
+      `M2(CGP)`             = list(category = "M2", subcategory = "CGP"),
+      `M2(CP_BioCarta)`     = list(category = "M2", subcategory = "CP:BIOCARTA"),
+      `M2(CP_Reactome)`     = list(category = "M2", subcategory = "CP:REACTOME"),
+      `M2(CP_WikiPathways)` = list(category = "M2", subcategory = "CP:WIKIPATHWAYS"),
+      `M3(MIRDB)`           = list(category = "M3", subcategory = "MIRDB"),
+      `M3(GTRD)`            = list(category = "M3", subcategory = "GTRD"),
+      `M5(GO_BP)`           = list(category = "M5", subcategory = "GO:BP"),
+      `M5(GO_CC)`           = list(category = "M5", subcategory = "GO:CC"),
+      `M5(GO_MF)`           = list(category = "M5", subcategory = "GO:MF"),
+      `M5(MPT)`             = list(category = "M5", subcategory = "MPT"),
+      `M7(Immune)`          = list(category = "M7", subcategory = NULL),
+      `M8(Celltype)`        = list(category = "M8", subcategory = NULL),
+      `MH(Hallmark)`        = list(category = "MH", subcategory = NULL)
     )
   )
   

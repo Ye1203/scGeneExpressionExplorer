@@ -4,6 +4,9 @@
 # this method. Therefore, if someone intends to perform differential expression
 # analysis on scRNA-seq or snRNA-seq data, I would recommend using Seurat’s FindMarkers function instead.
 # --Bingtian write on Apr. 6th, 2026
+
+# Download code from Max
+# devtools::install_github("mpyatkov/FindMarkersLoupe")
 library(stringr)
 library(tidyverse)
 library(NotationConverter)
@@ -121,7 +124,7 @@ compute_de <- function(seurat_obj, s1,c1,s2,c2, ix, sample_column, cluster_colum
   )
   
 
-  
+
   # # DOTPLOT
   # # subset of only required clusters (need to create 2 lines DotPlot)
   # only_clusters_CB <- WhichCells(seurat_obj, idents = c(id.1, id.2))

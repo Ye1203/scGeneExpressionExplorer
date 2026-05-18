@@ -2,11 +2,22 @@ library(shiny)
 library(shinyjs)
 library(Seurat)
 library(openxlsx)
+library(ggplot2)
+library(sortable)
+library(colourpicker)
+library(cowplot)
+library(dplyr)
+library(stringr)
+library(tidyr)
+library(ggrepel)
+# devtools::install_github("mpyatkov/NotationConverter")
+library(NotationConverter)
 # source(file.path(getwd(), "DE_analysis.R"))
 # ============================================================
 # -------------------- Utility Functions ---------------------
 # ============================================================
 
+# Load differnt type of data (.rds, .tsv, .xlsx)
 load_data_object <- function(path, type = c("seurat", "deg", "gsea")) {
   type <- match.arg(type)
   validate(need(file.exists(path), paste(type, "file does not exist")))
@@ -14,9 +25,16 @@ load_data_object <- function(path, type = c("seurat", "deg", "gsea")) {
   if (type == "seurat") {
     readRDS(path)
   } else if (type == "deg") {
-    read.delim(path, header = TRUE, stringsAsFactors = FALSE)
+    data <- read.delim(path, header = TRUE, stringsAsFactors = FALSE)
+    data <- NotationConverter::notationConverter(data, from = "segex", to = "mm10", column = "segex", replace_column = TRUE)
+    data$ratio <- log2(data$ratio)
+    colnames(data)[colnames(data) == "segex"] <- "gene"
+    colnames(data)[colnames(data) == "ratio"] <- "log2FC"
+    colnames(data)[colnames(data) == "fc"] <- "FC (linear)"
+    return(data)
   } else if (type == "gsea") {
-    openxlsx::read.xlsx(path)
+    data <- openxlsx::read.xlsx(path, sheet = 1)
+    return(data)
   }
 }
 
@@ -38,8 +56,6 @@ generate_combinations <- function(values) {
   comb
 }
 
-
-
 # ============================================================
 # -------------------- Comparison Module ---------------------
 # ============================================================
@@ -49,6 +65,7 @@ comparisonTableUI <- function(id, title_prefix) {
   uiOutput(ns("table_ui"))
 }
 
+# Step 1 UI
 comparisonTableServer <- function(id, column_values, prefix) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
@@ -172,6 +189,7 @@ comparisonTableServer <- function(id, column_values, prefix) {
   })
 }
 
+# Step 2 UI
 step2UI <- function(id) {
   ns <- NS(id)
   
@@ -205,6 +223,31 @@ step2UI <- function(id) {
           stype = "width:200px;"
         )))
   )
+}
+
+color_selected <- function(color_length) {
+  color_total <- c(
+    "#e6194b","#ffe119","#46f0f0","#f58231","#bcf60c", 
+    "#ff00ff","#9a6324","#fffac8","#e6beff","#00bfff", 
+    "#ffd8b1","#00ff7f","#f5a9bc","#1e90ff","#ffa500",
+    "#98fb98","#911eb4","#afeeee","#fa8072","#9acd32",
+    "#3cb44b","#000075","#808000","#cd5c5c","#dda0dd",
+    "#40e0d0","#ff69b4","#8a2be2","#c71585","#5f9ea0",
+    "#dc143c","#87cefa","#ff6347","#9932cc","#00ced1",
+    "#ff4500","#6a5acd","#b0e0e6","#d2691e","#a9a9f5",
+    "#adff2f","#8b0000","#7fffd4","#00fa9a","#ba55d3",
+    "#2e8b57","#ffdab9","#b22222","#ffe4e1","#7b68ee"
+  )
+  
+  if (color_length <= length(color_total)) {
+    return(color_total[1:color_length])
+  }
+  
+  warning("groups is larger than 50, color will randomly select")
+  palette_fn <- colorRampPalette(RColorBrewer::brewer.pal(12, "Paired"))
+  extra_colors <- palette_fn(color_length - length(color_total))
+  colors <- c(color_total, extra_colors)
+  return(colors)
 }
 
 # ----------------- Step2 Server Module -----------------
@@ -328,7 +371,14 @@ step2Server <- function(id, sample_rows, cluster_rows, sample_meta, cluster_meta
     # Get all valid sample comparisons from Step1
     all_sample_comps <- reactive({
       comps <- sample_rows()
-      comps <- comps[sapply(comps, function(x) !is.null(x$numerator) && !is.null(x$denominator))]
+      
+      if (is.null(comps) || length(comps) == 0) {
+        return(list())
+      }
+      
+      comps <- comps[unlist(lapply(comps, function(x) {
+        is.list(x) && !is.null(x$numerator) && !is.null(x$denominator)
+      }))]
       
       comp_list <- list()
       for (i in seq_along(comps)) {
@@ -344,7 +394,14 @@ step2Server <- function(id, sample_rows, cluster_rows, sample_meta, cluster_meta
     # Get all valid cluster comparisons from Step1
     all_cluster_comps <- reactive({
       comps <- cluster_rows()
-      comps <- comps[sapply(comps, function(x) !is.null(x$numerator) && !is.null(x$denominator))]
+      
+      if (is.null(comps) || length(comps) == 0) {
+        return(list())
+      }
+      
+      comps <- comps[unlist(lapply(comps, function(x) {
+        is.list(x) && !is.null(x$numerator) && !is.null(x$denominator)
+      }))]
       
       comp_list <- list()
       for (i in seq_along(comps)) {
@@ -704,6 +761,7 @@ step2Server <- function(id, sample_rows, cluster_rows, sample_meta, cluster_meta
 # ============================================================
 
 ui <- fluidPage(
+  htmltools::findDependencies(selectizeInput("dummy", NULL, choices = NULL)),
   useShinyjs(),
   titlePanel("DEG/GSEA prealpha"),
   
@@ -732,8 +790,8 @@ ui <- fluidPage(
               type = "pills",
               tabPanel("Violin Plot", value = "violin"),
               tabPanel("Dot Plot", value = "dotplot"),
-              tabPanel("Original Volcano", value = "volcano"),
-              tabPanel("Pathway Volcano", value = "pathway_volcano"),
+              tabPanel("Volcano Plot (Genes)", value = "volcano"),
+              tabPanel("Volcano Plot (Genes in Pathways)", value = "pathway_volcano"),
               tabPanel("GSEA NES", value = "gsea_nes")
             )
           )
@@ -741,6 +799,33 @@ ui <- fluidPage(
         column(
           width = 10,
           uiOutput("viz_panel")
+        )
+      )
+    ),
+    tabPanel(
+      "Data Output", 
+      fluidRow(
+        
+        column(
+          width = 2,
+          tags$div(
+            style = "
+              background-color: #f8f9fa;
+              padding: 10px;
+              border-radius: 10px;
+              height: 100%;
+            ",
+            
+            tabsetPanel(
+              id = "do_tabs",
+              type = "pills",
+              tabPanel("Gene Expression", value = "gene_expression")
+            )
+          )
+        ),
+        column(
+          width = 10,
+          uiOutput("data_output_ui")
         )
       )
     )
@@ -769,7 +854,7 @@ ui <- fluidPage(
 # ============================================================
 
 server <- function(input, output, session) {
-  
+  sortable::enable_modules()
   # Reactive value
   rv <- reactiveValues(
     data_obj = NULL,
@@ -782,8 +867,13 @@ server <- function(input, output, session) {
     gsea_path = NULL,
     
     visualization_marker = "",
+    visualization_pathway = "",
+    pathway_rename = NULL,
     
-    visualization_sample_column = ""
+    visualization_sample_column = "",
+    
+    save_path = "",
+    ui_freeze = FALSE
   )
   
   # ----------------- Load Data -----------------
@@ -815,11 +905,14 @@ server <- function(input, output, session) {
             style = "width: 100%; height: 35px;"
           )
         )
-      )
+      )%>% 
+        tagAppendAttributes(
+          style = "margin-bottom: 15px;"
+        )
     } else {
       fluidRow(
         column(
-          9,
+          10,
           textInput(
             inputId = input_path_id,
             value = "",
@@ -829,7 +922,7 @@ server <- function(input, output, session) {
           )
         ),
         column(
-          3,
+          2,
           actionButton(
             inputId = paste0("load_", id),
             label = "Load",
@@ -843,16 +936,32 @@ server <- function(input, output, session) {
   
   # Seurat data loading
   observeEvent(input$load_data, {
-    showModal(modalDialog(title = "Loading Data", "Please wait...", footer = NULL, easyClose = FALSE))
+    showModal(modalDialog(
+      title = "Loading Data",
+      "Please wait...",
+      footer = NULL,
+      easyClose = FALSE
+    ))
+    
     tryCatch({
       obj <- load_data_object(input$data_path, type = "seurat")
+      rv$visualization_sample_column <- ""
       rv$data_obj <- obj
       rv$data_obj_path <- input$data_path
+      rv$save_path <- paste0(gsub("\\.rds$", "", rv$data_obj_path), "_visualization")
       removeModal()
+      
       showNotification("Seurat data loaded successfully!", type = "message")
+      
     }, error = function(e) {
       removeModal()
-      showNotification(paste("Error:", e$message), type = "error")
+      
+      showModal(modalDialog(
+        title = "Error",
+        paste("Error:", e$message),
+        easyClose = TRUE,
+        footer = modalButton("Close")
+      ))
     })
   })
   
@@ -863,6 +972,7 @@ server <- function(input, output, session) {
       obj <- load_data_object(input$deg_path, type = "deg")
       rv$deg_obj <- obj
       rv$deg_obj_path <- input$deg_path
+      if(is.null(rv$data_obj)){rv$save_path <- paste0(gsub("\\.tsv$", "", rv$deg_obj_path), "_visualization")}
       removeModal()
       showNotification("DEG data loaded successfully!", type = "message")
     }, error = function(e) {
@@ -878,6 +988,7 @@ server <- function(input, output, session) {
       obj <- load_data_object(input$gsea_path, type = "gsea")
       rv$gsea_obj <- obj
       rv$gsea_obj_path <- input$gsea_path
+      if(is.null(rv$data_obj) & is.null(rv$deg_obj)){rv$save_path <- paste0(gsub("\\.xlsx$", "", rv$gsea_obj_path), "_visualization")}
       removeModal()
       showNotification("GSEA data loaded successfully!", type = "message")
     }, error = function(e) {
@@ -886,7 +997,7 @@ server <- function(input, output, session) {
     })
   })
   
-  # ----------------- Reactive unique values -----------------
+  # ----------------- Reactive unique values sample value, cluster value -----------------
   sample_values <- reactive({
     req(rv$data_obj, input$sample_column)
     extract_unique_values(rv$data_obj, input$sample_column)
@@ -1078,65 +1189,81 @@ server <- function(input, output, session) {
     species <- input$species
     if(species == "Homo sapiens"){
       db_choices <- c(
-        "Positional (C1) — Gene sets grouped by chromosomal location." = "Positional",
-        "CGP (C2, CGP) — Chemical and Genetic Perturbation gene sets." = "CGP",
-        "CP (C2, CP) — Canonical pathways." = "CP",
-        "BioCarta (C2, CP:BIOCARTA) — Curated signaling pathways." = "BioCarta",
-        "KEGG_LEGACY (C2, CP:KEGG_LEGACY) — KEGG legacy pathways." = "KEGG_LEGACY",
-        "KEGG (C2, CP:KEGG_MEDICUS) — Curated metabolic and signaling pathways." = "KEGG",
-        "PID (C2, CP:PID) — Pathway Interaction Database." = "PID",
-        "Reactome (C2, CP:REACTOME) — Expert-curated pathways." = "Reactome",
-        "WikiPathways (C2, CP:WIKIPATHWAYS) — Curated signaling pathways." = "WikiPathways",
-        "CP_CUSTOM (C2) — Custom curated canonical pathways." = "CP_CUSTOM",
-        "Motif_miR (C3, MIR:MIRDB) — microRNA target gene sets." = "Motif_miR",
-        "Motif_miR_Legacy (C3, MIR:MIR_LEGACY) — Legacy microRNA target gene sets." = "Motif_miR_Legacy",
-        "Motif_TF (C3, TFT:GTRD) — Transcription factor target gene sets." = "Motif_TF",
-        "Motif_TF_Legacy (C3, TFT:TFT_LEGACY) — Legacy transcription factor target sets." = "Motif_TF_Legacy",
-        "Computational (C4) — Computational gene sets." = "Computational",
-        "GO_BP (C5, GO:BP) — Biological Process ontology." = "GO_BP",
-        "GO_CC (C5, GO:CC) — Cellular Component ontology." = "GO_CC",
-        "GO_MF (C5, GO:MF) — Molecular Function ontology." = "GO_MF",
-        "HPO (C5, HPO) — Human Phenotype Ontology." = "HPO",
-        "Oncogenic (C6) — Oncogenic signatures." = "Oncogenic",
-        "Immune (C7, IMMUNESIGDB) — Immunologic gene sets." = "Immune",
-        "VAX (C7, VAX) — Vaccine response gene sets." = "VAX",
-        "Hallmark (H) — Hallmark gene sets." = "Hallmark"
+        "H - Hallmark gene sets — Coherent biological state or process signatures." = "H(Hallmark)",  
+        "C1 - Positional gene sets — Gene sets grouped by chromosomal location." = "C1(Positional)", 
+        "C2 (CGP) - Chemical and Genetic Perturbation gene sets." = "C2(CGP)", 
+        "C2 (CP) - Canonical pathway gene sets." = "C2(CP)", 
+        "C2 (CP:BIOCARTA) - BioCarta curated signaling pathways." = "C2(CP_BioCarta)",  
+        "C2 (CP:KEGG_LEGACY) - KEGG legacy pathway gene sets." = "C2(CP_KEGG_LEGACY)",  
+        "C2 (CP:KEGG_MEDICUS) - KEGG Medicus pathway gene sets." = "C2(CP_KEGG_MEDICUS)",  
+        "C2 (CP:PID) - Pathway Interaction Database gene sets." = "C2(CP_PID)",  
+        "C2 (CP:REACTOME) - Reactome curated pathway gene sets." = "C2(CP_Reactome)", 
+        "C2 (CP:WIKIPATHWAYS) - WikiPathways curated pathway gene sets." = "C2(CP_WikiPathways)", 
+        "C3 (MIR) - microRNA target gene sets." = "C3(MIR)",  
+        "C3 (MIR:MIRDB) - miRDB microRNA target predictions." = "C3(MIR_MIRDB)", 
+        "C3 (MIR:MIR_LEGACY) - Legacy microRNA target gene sets." = "C3(MIR_MIR_LEGACY)", 
+        "C3 (TFT) - Transcription factor target gene sets." = "C3(TFT)",  
+        "C3 (TFT:GTRD) - GTRD transcription factor target gene sets." = "C3(TFT_GTRD)", 
+        "C3 (TFT:TFT_LEGACY) - Legacy transcription factor target gene sets." = "C3(TFT_TFT_LEGACY)", 
+        "C4 - Computational gene sets." = "C4(Computational)", 
+        "C4 (3CA) - Curated Cancer Cell Atlas gene sets." = "C4(3CA)", 
+        "C4 (CGN) - Cancer Gene Neighborhood gene sets." = "C4(CGN)", 
+        "C4 (CM) - Cancer Module gene sets." = "C4(CM)", 
+        "C5 (GO:BP) - GO Biological Process ontology gene sets." = "C5(GO_BP)",  
+        "C5 (GO:CC) - GO Cellular Component ontology gene sets." = "C5(GO_CC)",  
+        "C5 (GO:MF) - GO Molecular Function ontology gene sets." = "C5(GO_MF)", 
+        "C5 (HPO) - Human Phenotype Ontology gene sets." = "C5(HPO)", 
+        "C6 - Oncogenic signature gene sets." = "C6(Oncogenic)", 
+        "C7 (IMMUNESIGDB) - Immunologic signature gene sets." = "C7(ImmuneSigDB)",
+        "C7 (VAX) - Vaccine response gene sets." = "C7(VAX)",  
+        "C8 - Cell type signature gene sets." = "C8(CellType)",  
+        "C9 - Computational perturbation signature gene sets." = "C9(CompPerturb)"
       )
+      
     } 
     else {db_choices <- c(
-      "Positional (M1) — Gene sets grouped by genomic location." = "Positional",
-      "CGP (M2, CGP) — Chemical and Genetic Perturbation gene sets." = "CGP",
-      "BioCarta (M2, CP:BIOCARTA) — Classical signaling pathways." = "BioCarta",
-      "Reactome (M2, CP:REACTOME) — Curated pathway database." = "Reactome",
-      "WikiPathways (M2, CP:WIKIPATHWAYS) — Curated signaling pathways." = "WikiPathways",
-      "Motif_TF (M3, GTRD) — Transcription factor target gene sets." = "Motif_TF",
-      "Motif_miR (M3, MIRDB) — microRNA target predictions." = "Motif_miR",
-      "GO_BP (M5, GO:BP) — Biological Process ontology." = "GO_BP",
-      "GO_CC (M5, GO:CC) — Cellular Component ontology." = "GO_CC",
-      "GO_MF (M5, GO:MF) — Molecular Function ontology." = "GO_MF",
-      "MP Tumor (M5, MPT) — Mouse phenotype tumor gene sets." = "MP_Tumor",
-      "Immune (M7) — Immunologic gene sets." = "Immune",
-      "Hallmark (MH) — Mouse hallmark gene sets." = "Hallmark"
+      "M1 - Positional gene sets — Gene sets corresponding to mouse chromosome cytogenetic bands." = "M1(Positional)",
+      "M2 (CGP) - Chemical and genetic perturbations — Gene sets represent expression signatures of genetic and chemical perturbations. A number of these gene sets come in pairs: xxx_UP (and xxx_DN) gene set representing genes induced (and repressed) by the perturbation." = "M2(CGP)",
+      "M2 (CP:BIOCARTA) - BioCarta subset of Canonical pathways — Classical signaling pathways." = "M2(CP_BioCarta)",
+      "M2 (CP:REACTOME) - Reactome subset of Canonical pathways — Curated pathway database." = "M2(CP_Reactome)",
+      "M2 (CP:WIKIPATHWAYS) - WikiPathways subset of Cononical pathways — Curated signaling pathways." = "M2(CP_WikiPathways)",
+      "M3 (MIRDB) - Motif_miR gene sets — microRNA target predictions." = "M3(MIRDB)",
+      "M3 (GTRD) - Motif_TF gene sets — Transcription factor target gene sets." = "M3(GTRD)",
+      "M5 (GO:BP) - GO_BP subset of Gene Ontology gene set — Biological Process ontology." = "M5(GO_BP)",
+      "M5 (GO:CC) - GO_CC subset of Gene Ontology gene sets — Cellular Component ontology." = "M5(GO_CC)",
+      "M5 (GO:MF) - GO_MF subset of Gene Ontology gene sets — Molecular Function ontology." = "M5(GO_MF)",
+      "M5 (MPT) - Tumor phenotype ontology — Mouse phenotype tumor gene sets." = "M5(MPT)",
+      "M7 - Immunologic signature gene sets — Gene sets that represent cell states and perturbations within the immune system." = "M7(Immune)",
+      "M8 - Cell type signature gene sets — Gene sets that contain curated cluster markers for cell types identified in single-cell sequencing studies of mouse tissue." = "M8(Celltype)",
+      "MH - Hallmark gene sets— Hallmark gene sets summarize and represent specific well-defined biological states or processes and display coherent expression. These gene sets were generated by a computational methodology based on identifying overlaps between gene sets in other MSigDB collections and retaining genes that display coordinate expression." = "MH(Hallmark)"
     )
     }
     
-    updateSelectInput(session, "gsea_db", choices = db_choices, selected = c("GO_BP", "Reactome", "Hallmark"))
+    updateSelectInput(
+      session,
+      "gsea_db",
+      choices = db_choices,
+      selected = unname(db_choices)
+    )
     
   })
   
-  # ----------------- Visualization UI -----------------
+  # ----------------- Visualization UI (VIOLIN, DOTPLOT, VOLCANO, NES) -----------------
   output$viz_panel <- renderUI({
     req(input$viz_tabs)
-    
-    switch(input$viz_tabs,
-           "violin" = uiOutput("violin_ui"),
-           "dotplot" = uiOutput("dotplot_ui"),
-           "volcano" = uiOutput("volcano_ui"),
-           "pathway_volcano" = uiOutput("pathway_volcano_ui"),
-           "gsea_nes" = uiOutput("gsea_nes_ui")
+    tagList(
+      switch(input$viz_tabs,
+             "violin" = uiOutput("violin_ui"),
+             "dotplot" = uiOutput("dotplot_ui"),
+             "volcano" = uiOutput("volcano_ui"),
+             "pathway_volcano" = uiOutput("pathway_volcano_ui"),
+             "gsea_nes" = uiOutput("gsea_nes_ui")
+      ),
+      br(),br(),br(),br(),br()
     )
   })
   
+  # VIOLIN UI
   output$violin_ui <- renderUI({
     tagList(
       h4("Seurat RDS Obj:"),
@@ -1152,14 +1279,15 @@ server <- function(input, output, session) {
         placeholder = "/path/to/deg_result.tsv",
         value = rv$deg_obj_path),
       fluidRow(
-        column(6, actionButton("marker_select_btn", "Select Marker", class = "btn-success", width = "100%")),
-        column(6, actionButton("sample_ident_select_btn", "Select Sample Identification", class = "btn-primary", width = "100%"))
+        column(6, actionButton("marker_select_btn", "Select Genes", class = "btn-success", width = "100%")),
+        column(6, actionButton("sample_ident_select_btn", "Select meta.data field", class = "btn-primary", width = "100%"))
       ),
       br(),
       uiOutput("violin_plot_tabs_ui"))
     
   })
   
+  # DOTPLOT UI
   output$dotplot_ui <- renderUI({
     tagList(
       h4("Seurat RDS Obj:"),
@@ -1175,11 +1303,15 @@ server <- function(input, output, session) {
         placeholder = "/path/to/deg_result.tsv",
         value = rv$deg_obj_path),
       fluidRow(
-        column(6, actionButton("marker_select_btn", "Select Marker", class = "btn-success", width = "100%")),
-        column(6, actionButton("sample_ident_select_btn", "Select Sample Identification", class = "btn-primary", width = "100%"))
-      ))
+        column(6, actionButton("marker_select_btn", "Select Genes", class = "btn-success", width = "100%")),
+        column(6, actionButton("sample_ident_select_btn", "Select meta.data field", class = "btn-primary", width = "100%"))
+      ),
+      br(), 
+      uiOutput("dot_plot_ui")
+    )
   })
   
+  # ORIGINAL VOLCANO UI
   output$volcano_ui <- renderUI({
     tagList(
       h4("DEG result:"),
@@ -1188,10 +1320,13 @@ server <- function(input, output, session) {
         label = "DEG File Path (.tsv)",
         placeholder = "/path/to/deg_result.tsv",
         value = rv$deg_obj_path),
-      actionButton("marker_select_btn", "Select Marker", class = "btn-success", width = "100%")
+      actionButton("marker_select_btn", "Select genes to be labeled (Optional)", class = "btn-success", width = "100%"),
+      br(), 
+      uiOutput("volcano_plot_ui")
     )
   })
   
+  # PATHWAY VOLCANO UI
   output$pathway_volcano_ui <- renderUI({
     tagList(
       h4("DEG result:"),
@@ -1206,9 +1341,18 @@ server <- function(input, output, session) {
         label = "GSEA File Path (.xlsx)",
         placeholder = "/path/to/gsea_file.xlsx",
         value = rv$gsea_obj_path),
-      actionButton("pathway_select_btn", "Select Pathway", class = "btn-warning", width = "100%"))
+      fluidRow(
+        column(6, actionButton("pathway_select_btn", "Select Pathway", class = "btn-warning", width = "100%")),
+        column(6, 
+               actionButton("pathway_rename_btn", "Rename Pathway", width = "100%"),
+               tags$style("#pathway_rename_btn { background-color: #967969; color: #ffffff; border-color: #ccc; }"))
+      ),
+      br(),
+      uiOutput("pathway_volcano_plot_ui"))
+    
   })
   
+  # GSEA NES UI
   output$gsea_nes_ui <- renderUI({
     tagList(
       h4("GSEA result:"),
@@ -1217,18 +1361,26 @@ server <- function(input, output, session) {
         label = "GSEA File Path (.xlsx)",
         placeholder = "/path/to/gsea_file.xlsx",
         value = rv$gsea_obj_path),
-      actionButton("pathway_select_btn", "Select Pathway", class = "btn-warning", width = "100%"))
+      fluidRow(
+        column(6, actionButton("pathway_select_btn", "Select Pathway", class = "btn-warning", width = "100%")),
+        column(6, 
+               actionButton("pathway_rename_btn", "Rename Pathway", width = "100%"),
+               tags$style("#pathway_rename_btn { background-color: #967969; color: #ffffff; border-color: #ccc; }"))
+      ),
+      br(), 
+      uiOutput("nes_barplot_ui")
+    )
   })
   
-  # Violin plot UI
+  # ----------------- Violin plot UI, Check whether data_obj exist (copy) -----------------
   output$violin_plot_tabs_ui <- renderUI({
     
-    if (is.null(rv$data_obj)) {
+    if (is.null(rv$data_obj) | rv$visualization_marker == "" | rv$visualization_sample_column == "") {
       
       tagList(
         div(
           style = "padding: 15px; background-color: #fff3cd; border: 1px solid #ffeeba; border-radius: 5px;",
-          "Violin plot requires a loaded Seurat RDS object. Please load data first."
+          "Violin plot requires a loaded Seurat RDS object, gene list (`Select Gene`) and meta.data field (Select meta.data field). Please load data to process"
         )
       )
       
@@ -1242,8 +1394,487 @@ server <- function(input, output, session) {
     }
   })
   
-  output$original_violin_ui <- renderUI({})
-  output$stack_violin_ui <- renderUI({})
+  # ----------------- ORIGINAL VIOLIN UI - VIOLIN UI - violin_plot_tabs_ui -----------------
+  output$original_violin_ui <- renderUI({
+    req(rv$data_obj)
+    req(rv$visualization_marker)
+    req(rv$visualization_sample_column != "")
+    req(!rv$ui_freeze)
+    tagList(
+      
+      h3("Original Violin Plot"),
+      
+      hr(),
+      div(
+        style = "display: flex; justify-content: center;",
+        plotOutput("original_violin_plot", height = "288px", width = "384px")),
+      
+      hr(),
+      
+      fluidRow(
+        column(3, numericInput("v_x_lab_size", "X label size", value = 12)),
+        column(3, numericInput("v_y_lab_size", "Y label size", value = 12)),
+        column(3, numericInput("v_x_text_size", "X text size", value = 10)),
+        column(3, numericInput("v_y_text_size", "Y text size", value = 10))
+      ),
+      fluidRow(
+        column(3, numericInput("v_title_size", "Title size", value = 14)),
+        column(3, numericInput("v_angle", "X rotation angle", value = 0)),
+        column(3, numericInput("v_width", "PDF width (inch)", value = 4)),
+        column(3, numericInput("v_height", "PDF height (inch)", value = 3))
+      ),
+      fluidRow(
+        column(4, div(style = "padding-top: 22px;", checkboxInput("v_show_points", "Show points", value = TRUE)))
+      ),
+      hr(),
+      textInput(
+        "violin_save_path",
+        "Violin output directory",
+        value = file.path(rv$save_path, "Original_Violin"),
+        width ="100%"
+      ),
+      hr(),
+      fluidRow(
+        column(6,
+               actionButton(
+                 "generate_all_violin",
+                 "Generate All Marker Violin Plots and save",
+                 style = "background-color: #87cefa; color: white;",
+                 width = "100%"
+               )
+        ),
+        column(6,
+               downloadButton(
+                 "download_violin",
+                 "Download Violin Plots",
+                 style = "background-color: #4CAF50; color: white; width: 100%;"
+               )
+        )
+      )
+    )
+  })
+  
+  # ----------------- STACK VIOLIN UI - VIOLIN UI - violin_plot_tabs_ui -----------------
+  output$stack_violin_ui <- renderUI({
+    req(rv$data_obj)
+    req(rv$visualization_marker)
+    req(rv$visualization_sample_column != "")
+    req(!rv$ui_freeze)
+    tagList(
+      h3("Stack Violin Plot"),
+      hr(),
+      actionButton("set_group_gene", "Set the grouping and color of the genes", class = "btn-info", width = "100%"),
+      br(),br(),
+      div(
+        style = "display: flex; justify-content: center;",
+        plotOutput("stack_violin_plot", height = "768px", width = "864px")),
+      fluidRow(
+        # LEFT
+        column(3, numericInput("stack_violin_y_left_sample_size", "Left sample text size", value = 2.5)),
+        column(3, numericInput("stack_violin_y_left_gene_size", "Left gene size", value = 8)),
+        column(3, numericInput("stack_violin_y_left_label_size", "Left axis label size", value = 8)),
+        # RIGHT
+        column(3, numericInput("stack_violin_x_size", "X axis sample size", value = 8)),
+        column(3, numericInput("stack_violin_y_right_value_size", "Right Y-axis value size", value = 8)),
+        column(3, numericInput("stack_violin_y_right_label_size", "Right Y-axis label size", value = 8)),
+        # LAYOUT
+        column(6, sliderInput("stack_violin_left_proportion", "Left panel proportion", min = 0.001, max = 0.999, value = 0.3, width = "100%")),
+        column(3, numericInput("stack_width", "PDF width (inch)", value = 9)),
+        column(3, numericInput("stack_height", "PDF height (inch)", value = 8))
+      ),
+      
+      fluidRow(
+        column(12,
+               textInput(
+                 "stack_save_path",
+                 "Violin output directory",
+                 value = file.path(rv$save_path, "Stack_Violin"),
+                 width ="100%"
+               ),
+        ),
+        column(6,
+               actionButton("save_stack_plot", "Save PDF",
+                            style = "background-color: #87cefa; color: white; width: 100%;")
+        ),
+        column(6,
+               downloadButton("download_stack_plot", "Download Violin Plot",
+                              style = "background-color: #4CAF50; color: white; width: 100%;")
+        )
+      )
+      
+    )
+  })
+  
+  # ----------------- DOTPLOT UI -----------------
+  output$dot_plot_ui <- renderUI({
+    if (is.null(rv$data_obj) | rv$visualization_marker == "" | rv$visualization_sample_column == "") {
+      tagList(
+        div(
+          style = "padding: 15px; background-color: #fff3cd; border: 1px solid #ffeeba; border-radius: 5px;",
+          "Dotplot plot requires a loaded Seurat RDS object, gene list (`Select Gene`) and meta.data field (Select meta.data field). Please load data to process."
+        )
+      )
+    }else{
+      tagList(
+        div(
+          style = "display: flex; justify-content: center;",
+          plotOutput("dotplot_plot", height = "288px", width = "480px")),
+        fluidRow(
+          column(3, numericInput("dotplot_x_text_size", "X text size", value = 10)),
+          column(3, numericInput("dotplot_y_text_size", "Y text size", value = 10)),
+          column(3, numericInput("dotplot_dot_max_size", "Max dot size", value = 6)),
+          column(3, numericInput("dotplot_x_rotate", "X test rotate degree", value = 45))
+        ),
+        fluidRow(
+          column(3,
+                 selectInput(
+                   "dotplot_legend_position",
+                   "Legend position",
+                   choices = c("right", "left", "top", "bottom", "none"),
+                   selected = "right"
+                 )
+          ),
+          column(3, numericInput("dotplot_legend_text_size", "Legend text size", value = 10)),
+          column(3, numericInput("dotplot_legend_title_size", "Legend title size", value = 11)),
+          column(3, numericInput("dotplot_legend_key_size", "Key size", value = 0.5))
+        ),
+        fluidRow(
+          column(3, numericInput("dotplot_width", "PDF width (inch)", value = 5)),
+          column(3, numericInput("dotplot_height", "PDF height (inch)", value = 3)),
+          column(6, div(style = "padding-top: 22px;", checkboxInput("dotplot_scale", "Scale the color of dotplot (average expression)", value = TRUE, width = "100%")))
+        ),
+        fluidRow(
+          column(12,
+                 textInput(
+                   "dotplot_save_path",
+                   "Dotplot output directory",
+                   value = file.path(rv$save_path, "Dotplot"),
+                   width ="100%"
+                 ),
+          ),
+          column(6,
+                 actionButton("save_dotplot", "Save PDF",
+                              style = "background-color: #87cefa; color: white; width: 100%;")
+          ),
+          column(6,
+                 downloadButton("download_dotplot", "Download Dot Plot",
+                                style = "background-color: #4CAF50; color: white; width: 100%;")
+          )
+        )
+      )
+    }
+  })
+  
+  # ----------------- Original Volcano UI -----------------
+  output$volcano_plot_ui <- renderUI({
+    
+    if (is.null(rv$deg_obj)) {
+      return(
+        tagList(
+          div(
+            style = "padding: 15px; background-color: #fff3cd; border: 1px solid #ffeeba; border-radius: 5px;",
+            "Volcano Plot (Genes) requires a loaded DEG dataset. Please load the data to proceed."
+          )
+        )
+      )
+    }else{
+      tagList(
+        div(
+          style = "display: flex; justify-content: center;",
+          plotOutput("volcano_plot", 
+                     height = "307.2px",   
+                     width = "360px")    
+        ),
+        fluidRow(
+          column(3, numericInput("original_volcano_ylimit", "Y limit", value = 150)),
+          column(3, numericInput("original_volcano_xlimit", "X limit", value = 10)),
+          column(3, numericInput("original_volcano_pvalue_limit", "P-value cutoff", value = 0.05)),
+          column(3, numericInput("original_volcano_log2FC_limit", "log2FC cutoff", value = 0.25))
+        ),
+        fluidRow(
+          column(3, numericInput("original_volcano_size_point", "Point size", value = 0.8)),
+          column(3, numericInput("original_volcano_size_label", "Label size", value = 3)),
+          column(3, numericInput("original_volcano_text_size", "Axis text size", value = 10)),
+          column(3, numericInput("original_volcano_title_size", "Axis title size", value = 10))
+        ),
+        fluidRow(
+          column(3, numericInput("original_volcano_width", "PDF width (inch)", value = 3.6)),
+          column(3, numericInput("original_volcano_height", "PDF height (inch)", value = 3.2)),
+          column(6, div(style = "padding-top: 22px;", checkboxInput("original_volcano_auto_label", "Automatically label gene based on volcano graph", value = FALSE, width = "100%")))
+        ),
+        fluidRow(
+          column(12,
+                 textInput(
+                   "original_volcano_save_path",
+                   "Original Volcano Plot output directory",
+                   value = file.path(rv$save_path, "Original_Volcano"),
+                   width ="100%"
+                 ),
+          ),
+          column(6,
+                 actionButton("save_original_volcano_plot", "Save PDF",
+                              style = "background-color: #87cefa; color: white; width: 100%;")
+          ),
+          column(6,
+                 downloadButton("download_original_volcano_plot", "Download Volcano Plot",
+                                style = "background-color: #4CAF50; color: white; width: 100%;")
+          )
+        )
+      )}
+  })
+  # ----------------- Pathway Volcano UI -----------------
+  output$pathway_volcano_plot_ui <- renderUI({
+    
+    if (is.null(rv$deg_obj) | is.null(rv$gsea_obj) | rv$visualization_pathway == "") {
+      
+      tagList(
+        div(
+          style = "padding: 15px; background-color: #fff3cd; border: 1px solid #ffeeba; border-radius: 5px;",
+          "Volcano Plot (Pathways) requires a loaded DEG dataset, GSEA dataset and selected pathways. Please load the data and select pathway to proceed."
+        )
+      )
+      
+    } else {
+      
+      tabsetPanel(
+        tabPanel("Generate multi pathways on separate plot", uiOutput("pathway_volcano_multi_ui")),
+        tabPanel("Generate multi pathways on one plot", uiOutput("pathway_volcano_single_ui"))
+      )
+    }
+  })
+  # ----------------- Pathway Volcano UI (Multi)-----------------
+  output$pathway_volcano_multi_ui <- renderUI({
+    tagList(
+      h5("Example:"),
+      div(
+        style = "display: flex; justify-content: center;",
+        plotOutput(
+          "pathway_volcano_multi_plot",
+          height = "500px",
+          width = "720px"
+        )
+      ),
+      
+      fluidRow(
+        column(3, numericInput("pathway_volcano_pv_limit", "P value limit", value = 0.05)),
+        column(3, numericInput("pathway_volcano_log2fc_limit", "log2FC limit", value = 0.25)),
+        column(3, numericInput("pathway_volcano_point_size", "Point size", value = 5)),
+        column(3,
+               selectInput(
+                 "pathway_volcano_legend_position",
+                 "Legend position",
+                 choices = c("right", "left", "top", "bottom", "none"),
+                 selected = "right"
+               )
+        )
+      ),
+      fluidRow(
+        column(3, numericInput("pathway_volcano_label_size", "Label size", value = 4)),
+        column(3, numericInput("pathway_volcano_axis_title_size", "Axis title size", value = 10)),
+        column(3, numericInput("pathway_volcano_axis_text_size", "Axis text size", value = 10)),
+        column(3, numericInput("pathway_volcano_legend_text_size", "Legend text size", value = 10))
+      ),
+      
+      fluidRow(
+        column(3, numericInput("pathway_volcano_label_n", "The number of labels (based on top log2FC)", value = 10)),
+        column(3, numericInput("pathway_volcano_pdf_width", "PDF width (inch)", value = 6)),
+        column(3, numericInput("pathway_volcano_pdf_height", "PDF height (inch)", value = 8))
+      ),
+      
+      fluidRow(
+        column(
+          12,
+          textInput(
+            "pathway_volcano_save_path",
+            "Output directory",
+            value = file.path(rv$save_path, "Pathway_Volcano"),
+            width = "100%"
+          )
+        )
+      ),
+      
+      fluidRow(
+        column(
+          6,
+          actionButton(
+            "save_pathway_multi_volcano",
+            "Save PDF",
+            style = "background-color: #87cefa; color: white; width: 100%;"
+          )
+        ),
+        column(
+          6,
+          downloadButton(
+            "download_pathway_multi_volcano",
+            "Download Plot",
+            style = "background-color: #4CAF50; color: white; width: 100%;"
+          )
+        )
+      )
+    )
+  })
+  
+  # ----------------- Pathway Volcano UI (Single) -----------------
+  output$pathway_volcano_single_ui <- renderUI({
+    tagList(
+      
+      div(
+        style = "display: flex; justify-content: center;",
+        plotOutput(
+          "pathway_volcano_plot",
+          height = "500px",
+          width = "720px"
+        )
+      ),
+      
+      fluidRow(
+        column(3, numericInput("pathway_volcano_pv_limit", "P value limit", value = 0.05)),
+        column(3, numericInput("pathway_volcano_log2fc_limit", "log2FC limit", value = 0.25)),
+        column(3, numericInput("pathway_volcano_point_size", "Point size", value = 5)),
+        column(3,
+               selectInput(
+                 "pathway_volcano_legend_position",
+                 "Legend position",
+                 choices = c("right", "left", "top", "bottom", "none"),
+                 selected = "right"
+               )
+        )
+      ),
+      fluidRow(
+        column(3, numericInput("pathway_volcano_label_size", "Label size", value = 4)),
+        column(3, numericInput("pathway_volcano_axis_title_size", "Axis title size", value = 10)),
+        column(3, numericInput("pathway_volcano_axis_text_size", "Axis text size", value = 10)),
+        column(3, numericInput("pathway_volcano_legend_text_size", "Legend text size", value = 10))
+      ),
+      
+      fluidRow(
+        column(3, numericInput("pathway_volcano_label_n", "The number of labels (based on top log2FC)", value = 10)),
+        column(3, numericInput("pathway_volcano_pdf_width", "PDF width (inch)", value = 6)),
+        column(3, numericInput("pathway_volcano_pdf_height", "PDF height (inch)", value = 8))
+      ),
+      
+      fluidRow(
+        column(
+          12,
+          textInput(
+            "pathway_volcano_save_path",
+            "Output directory",
+            value = file.path(rv$save_path, "Pathway_Volcano"),
+            width = "100%"
+          )
+        )
+      ),
+      
+      fluidRow(
+        column(
+          6,
+          actionButton(
+            "save_pathway_volcano",
+            "Save PDF",
+            style = "background-color: #87cefa; color: white; width: 100%;"
+          )
+        ),
+        column(
+          6,
+          downloadButton(
+            "download_pathway_volcano",
+            "Download Plot",
+            style = "background-color: #4CAF50; color: white; width: 100%;"
+          )
+        )
+      )
+    )
+    })
+  # ----------------- NES Barplot UI -----------------
+  output$nes_barplot_ui <- renderUI({
+    
+    if (is.null(rv$gsea_obj) | rv$visualization_pathway == "") {
+      
+      tagList(
+        div(
+          style = "padding: 15px; background-color: #fff3cd; border: 1px solid #ffeeba; border-radius: 5px;",
+          "NES Barplot requires a loaded GSEA dataset and selected pathways. Please load the data and select pathway to proceed."
+        )
+      )
+      
+    } else {
+      tagList(
+        
+        div(
+          style = "display: flex; justify-content: center;",
+          plotOutput(
+            "nes_barplot",
+            height = "600px",
+            width = "600px"
+          )
+        ),
+        fluidRow(
+          column(3, numericInput("nes_barplot_pathway_size", "y axis text (pathway) size", value = 12)),
+          column(3, numericInput("nes_barplot_y_title_size", "y axis title size", value = 10)),
+          column(3, numericInput("nes_barplot_nes_value_size", "x axis text (NES value) size", value = 12)),
+          column(3, numericInput("nes_barplot_x_title_size", "x axis title size", value = 10)),
+        ),
+        fluidRow(
+          column(3, numericInput("nes_barplot_pathway_length", "Pathway line break length", value = 40)),
+          column(3, numericInput("nes_barplot_bar_width", "Bar width", value = 0.7)),
+          column(3, numericInput("nes_barplot_pdf_width", "PDF width (inch)", value = 6)),
+          column(3, numericInput("nes_barplot_pdf_height", "PDF height (inch)", value = 6)),
+        ),
+        fluidRow(
+          column(
+            12,
+            textInput(
+              "nes_barplot_save_path",
+              "Output directory",
+              value = file.path(rv$save_path, "NES_barplot"),
+              width = "100%"
+            )
+          )
+        ),
+        
+        fluidRow(
+          column(
+            6,
+            actionButton(
+              "save_nes_barplot",
+              "Save PDF",
+              style = "background-color: #87cefa; color: white; width: 100%;"
+            )
+          ),
+          column(
+            6,
+            downloadButton(
+              "download_nes_barplot",
+              "Download Plot",
+              style = "background-color: #4CAF50; color: white; width: 100%;"
+            )
+          )
+        )
+        )
+      }})
+  
+  # ----------------- Data Output UI-----------------
+  output$data_output_ui <- renderUI({
+    req(input$do_tabs)
+    tagList(
+      switch(input$do_tabs,
+             "gene_expression" = uiOutput("gene_expression_ui")
+      ),
+      br(),br(),br(),br(),br()
+    )
+  })
+  
+  output$gene_expression_ui <- renderUI({
+    tagList(
+      h4("Seurat RDS Obj:"),
+      path_input_ui(
+        id = "data",
+        label = "Seurat File Path",
+        placeholder = "/path/to/seurat_file.rds",
+        value = rv$data_obj_path)
+    )
+  })
+  
   # ----------------- DEG FUNCTION -----------------
   
   # Reset handlers
@@ -1305,7 +1936,7 @@ server <- function(input, output, session) {
       modalDialog(
         title = "Analysis Summary",
         size = "l",
-        easyClose = TRUE,
+        easyClose = FALSE,
         tags$div(style="overflow-y:auto;",
                  tags$table(
                    class = "table table-bordered table-striped",
@@ -1380,7 +2011,6 @@ server <- function(input, output, session) {
     source("/projectnb/wax-es/00_shinyapp/DEG/DEG/DE_analysis.R")
     save_path <- input$save_path
     if (!dir.exists(save_path)) dir.create(save_path, recursive = TRUE)
-    
     sample_cards_data <- step2_data$sample_cards_data()
     cluster_cards_data <- step2_data$cluster_cards_data()
     
@@ -1459,7 +2089,6 @@ server <- function(input, output, session) {
         )
         
         write_tsv(res_list$segex_output, file.path(save_path, res_list$segex_filename), col_names = TRUE)
-        
         incProgress(1/n, detail = paste("Processing comparison", i, "of", n))
       }
     })
@@ -1651,18 +2280,19 @@ server <- function(input, output, session) {
   # ----------------- VISUALIZATION FUNCTION Marker Select -----------------
   
   observeEvent(input$marker_select_btn, {
+    rv$ui_freeze = TRUE
     showModal(
       modalDialog(
-        title = "Marker Selection",
+        title = "Selection of genes for analysis",
         size = "l",
-        easyClose = TRUE,
+        easyClose = FALSE,
         
         fluidRow(
           column(
             width = 6,
             textAreaInput(
               inputId = "marker_text",
-              label = "Current Marker:",
+              label = "Gene List:",
               value = rv$visualization_marker,
               rows = 20,
               placeholder = "Paste genes here:\nGene_A\nGene_B\nGene_C",
@@ -1670,7 +2300,7 @@ server <- function(input, output, session) {
             ),
             actionButton(
               "clear_marker",
-              "Clear All Markers",
+              "Clear All Genes",
               class = "btn-danger",
               width = "100%"
             )
@@ -1678,124 +2308,154 @@ server <- function(input, output, session) {
           column(
             width = 6,
             tagList(
-            # --- Marker count ---
+              # --- Marker count ---
               tags$div(
                 style = "margin-bottom: 10px; display: flex; align-items: center; gap: 6px;",
-                tags$span("Current Number of Marker:"),
+                tags$span("Current Number of Genes:"),
                 tags$span(
                   style = "color: red; font-weight: bold;",
                   textOutput("marker_count")
                 )
               ),
-            # =========================
-            # CASE 1: DEG NOT AVAILABLE
-            # =========================
-            conditionalPanel(
-              condition = "output.deg_available == false",
-              
-              tags$div(
-                style = "padding: 15px; color: #777;",
-                tags$h5("DEG not loaded"),
-                tags$p("Upload DEG file to enable advanced marker selection.")
-              )
-            ),
-            
-            # =========================
-            # CASE 2: DEG AVAILABLE
-            # =========================
-            conditionalPanel(
-              condition = "output.deg_available == true",
-              
-              # --- DEG button ---
-              actionButton(
-                "use_deg_marker_btn",
-                "Use DEG file to search marker",
-                class = "btn btn-primary",
-                width = "100%"
-              ),
-              
-              tags$hr(),
-              
               # =========================
-              # 1. Top N markers
+              # CASE 1: DEG NOT AVAILABLE
               # =========================
-              fluidRow(
-                column(
-                  width = 8,
-                  numericInput(
-                    "top_n_pvalue",
-                    "Top N (smallest p-value):",
-                    value = 50,
-                    min = 1
-                  )
-                ),
-                column(
-                  width = 4,
-                  br(),
-                  actionButton(
-                    "apply_top_n",
-                    "Apply",
-                    class = "btn btn-success",
-                    width = "100%"
-                  )
+              conditionalPanel(
+                condition = "output.deg_available == false",
+                
+                tags$div(
+                  style = "padding: 15px; color: #777;",
+                  tags$h5("DEG not loaded"),
+                  tags$p("Upload DEG file to enable advanced marker selection.")
                 )
               ),
               
               # =========================
-              # 2. Top % markers
+              # CASE 2: DEG AVAILABLE
               # =========================
-              fluidRow(
-                column(
-                  width = 8,
-                  numericInput(
-                    "top_pct_pvalue",
-                    "Top % (smallest p-value):",
-                    value = 10,
-                    min = 1,
-                    max = 100
+              conditionalPanel(
+                condition = "output.deg_available == true",
+                
+                # --- DEG button ---
+                actionButton(
+                  "use_deg_marker_btn",
+                  "Use DEG file to search for genes",
+                  class = "btn btn-primary",
+                  width = "100%"
+                ),
+                
+                tags$hr(),
+                
+                # =========================
+                # 1. Top N markers
+                # =========================
+                fluidRow(
+                  column(
+                    width = 8,
+                    numericInput(
+                      "top_n_pvalue",
+                      "Top N (smallest p-value):",
+                      value = 50,
+                      min = 1
+                    )
+                  ),
+                  column(
+                    width = 4,
+                    br(),
+                    actionButton(
+                      "apply_top_n",
+                      "Apply",
+                      class = "btn btn-success",
+                      width = "100%"
+                    )
                   )
                 ),
-                column(
-                  width = 4,
-                  br(),
-                  actionButton(
-                    "apply_top_pct",
-                    "Apply",
-                    class = "btn btn-success",
-                    width = "100%"
-                  )
-                )
-              ),
-              
-              # =========================
-              # 3. pvalue threshold
-              # =========================
-              fluidRow(
-                column(
-                  width = 8,
-                  numericInput(
-                    "pvalue_threshold",
-                    "p-value < threshold:",
-                    value = 0.05,
-                    min = 0,
-                    step = 0.001
+                
+                # =========================
+                # 2. Top % markers
+                # =========================
+                fluidRow(
+                  column(
+                    width = 8,
+                    numericInput(
+                      "top_pct_pvalue",
+                      "Top % (smallest p-value):",
+                      value = 10,
+                      min = 1,
+                      max = 100
+                    )
+                  ),
+                  column(
+                    width = 4,
+                    br(),
+                    actionButton(
+                      "apply_top_pct",
+                      "Apply",
+                      class = "btn btn-success",
+                      width = "100%"
+                    )
                   )
                 ),
-                column(
-                  width = 4,
-                  br(),
-                  actionButton(
-                    "apply_pvalue",
-                    "Apply",
-                    class = "btn btn-success",
-                    width = "100%"
-                  ))))))),
-      footer = modalButton("Close"))
-    )
+                
+                # =========================
+                # 3. pvalue threshold
+                # =========================
+                fluidRow(
+                  column(
+                    width = 8,
+                    numericInput(
+                      "pvalue_threshold",
+                      "p-value < threshold:",
+                      value = 0.05,
+                      min = 0,
+                      step = 0.001
+                    )
+                  ),
+                  column(
+                    width = 4,
+                    br(),
+                    actionButton(
+                      "apply_pvalue",
+                      "Apply",
+                      class = "btn btn-success",
+                      width = "100%"
+                    ))),
+                # =========================
+                # 4. log2fc
+                # =========================
+                fluidRow(
+                  column(
+                    width = 8,
+                    numericInput(
+                      "log2fc_updown_number",
+                      "log2FC upregulated and downregulated number:",
+                      value = 10,
+                      min = 1,
+                      step = 1
+                    )
+                  ),
+                  column(
+                    width = 4,
+                    br(),
+                    actionButton(
+                      "apply_log2FC",
+                      "Apply",
+                      class = "btn btn-success",
+                      width = "100%"
+                    )))
+              )))),
+        footer = actionButton("close_modal", "Close")
+      ))
   })
   
   observeEvent(input$marker_text, {
-    rv$visualization_marker <- input$marker_text
+    
+    lines <- unlist(strsplit(input$marker_text, "\n"))
+    
+    lines <- lines[trimws(lines) != ""]
+    
+    rv$visualization_marker <- paste(lines, collapse = "\n")
+    
   }, ignoreInit = TRUE)
   
   observeEvent(input$clear_marker, {
@@ -1829,7 +2489,7 @@ server <- function(input, output, session) {
     df2 <- df[order(df$pvalue_1), ]
     df2 <- head(df2, input$top_n_pvalue)
     
-    rv$visualization_marker <- paste(df2$segex, collapse = "\n")
+    rv$visualization_marker <- paste(df2$gene, collapse = "\n")
     
     updateTextAreaInput(session, "marker_text", value = rv$visualization_marker)
   })
@@ -1840,7 +2500,7 @@ server <- function(input, output, session) {
     df <- df[order(df$pvalue_1), ]
     n <- ceiling(nrow(df) * input$top_pct_pvalue / 100)
     df2 <- head(df, n)
-    rv$visualization_marker <- paste(df2$segex, collapse = "\n")
+    rv$visualization_marker <- paste(df2$gene, collapse = "\n")
     updateTextAreaInput(session, "marker_text", value = rv$visualization_marker)
   })
   # less than p value selct
@@ -1851,11 +2511,23 @@ server <- function(input, output, session) {
     
     df2 <- df[df$pvalue_1 < input$pvalue_threshold, ]
     
-    rv$visualization_marker <- paste(df2$segex, collapse = "\n")
+    rv$visualization_marker <- paste(df2$gene, collapse = "\n")
     
     updateTextAreaInput(session, "marker_text", value = rv$visualization_marker)
   })
-  
+  # log2fc upregulated and downregulated
+  observeEvent(input$apply_log2FC, {
+    req(rv$deg_obj)
+    req(input$log2fc_updown_number)
+    df <- rv$deg_obj
+    n <- input$log2fc_updown_number
+    ord <- order(df$log2FC)
+    df_down <- df[ord[1:n], ]
+    df_up   <- df[rev(ord)[1:n], ]
+    df2 <- unique(rbind(df_up, df_down))
+    rv$visualization_marker <- paste(df2$gene, collapse = "\n")
+    updateTextAreaInput(session, "marker_text", value = rv$visualization_marker)
+  })
   # select marker on deg file
   observeEvent(input$use_deg_marker_btn, {
     library(DT)
@@ -1863,7 +2535,7 @@ server <- function(input, output, session) {
     
     showModal(
       modalDialog(
-        title = "Select Markers from DEG",
+        title = "Select Genes from DEG",
         size = "l",
         easyClose = FALSE,
         
@@ -1875,7 +2547,7 @@ server <- function(input, output, session) {
             "Confirm Selection",
             class = "btn btn-primary"
           ),
-          modalButton("Cancel")
+          actionButton("close_modal", "Close")
         )
       )
     )
@@ -1886,13 +2558,6 @@ server <- function(input, output, session) {
     req(rv$deg_obj)
     
     df <- rv$deg_obj
-    df_display <- df
-    
-    num_cols <- sapply(df, is.numeric)
-    
-    df_display[num_cols] <- lapply(df_display[num_cols], function(x) {
-      round(x, 2)
-    })
     
     # ---- Get current marker genes safely ----
     marker_genes <- character(0)
@@ -1903,10 +2568,10 @@ server <- function(input, output, session) {
     }
     
     # ---- Only keep genes that exist in DEG table ----
-    valid_idx <- which(df$segex %in% marker_genes)
+    valid_idx <- which(df$gene %in% marker_genes)
     
     DT::datatable(
-      df_display,
+      df,
       class = "compact",
       # ---- Preselect valid rows ----
       selection = list(
@@ -1926,7 +2591,8 @@ server <- function(input, output, session) {
         
         scrollX = TRUE
       )
-    )
+    )%>%
+      DT::formatRound(c("log2FC", "FC (linear)", "intensity_1", "intensity_2", "pvalue_1"), 2)
   })
   
   get_selected_genes <- function() {
@@ -1939,7 +2605,7 @@ server <- function(input, output, session) {
       return(character(0))
     }
     
-    rv$deg_obj$segex[sel_idx]
+    rv$deg_obj$gene[sel_idx]
   }
   
   observeEvent(input$confirm_deg_marker, {
@@ -1955,12 +2621,12 @@ server <- function(input, output, session) {
       "marker_text",
       value = rv$visualization_marker
     )
-    
+    rv$ui_freeze = TRUE
     showModal(
       modalDialog(
         title = "Marker Selection",
         size = "l",
-        easyClose = TRUE,
+        easyClose = FALSE,
         
         fluidRow(
           column(
@@ -2094,22 +2760,48 @@ server <- function(input, output, session) {
                       "Apply",
                       class = "btn btn-success",
                       width = "100%"
+                    ))),
+                # =========================
+                # 4. log2fc
+                # =========================
+                fluidRow(
+                  column(
+                    width = 8,
+                    numericInput(
+                      "log2fc_updown_number",
+                      "log2FC upregulated and downregulated number:",
+                      value = 10,
+                      min = 1,
+                      step = 1
+                    )
+                  ),
+                  column(
+                    width = 4,
+                    br(),
+                    actionButton(
+                      "apply_log2FC",
+                      "Apply",
+                      class = "btn btn-success",
+                      width = "100%"
                     ))))))),
-        footer = modalButton("Close"))
-    )
+        footer = actionButton("close_modal", "Close")
+      ))
   })
-  
-  # ----------------- VISUALIZATION FUNCTION Sample Identification select -----------------
-  observeEvent(input$sample_ident_select_btn, {
+  observeEvent(input$close_modal, {
     
-    # ========== 1. data_obj 为空 ==========
+    removeModal()
+    rv$ui_freeze <- FALSE
+  })
+  # ----------------- VISUALIZATION FUNCTION Sample Identification Select -----------------
+  observeEvent(input$sample_ident_select_btn, {
+    rv$ui_freeze <- TRUE
     if (is.null(rv$data_obj)) {
       
       showModal(modalDialog(
         title = "sample identification select",
-        "Please load a Seurat RDS obj to select sample identification",
-        easyClose = TRUE,
-        footer = modalButton("Close")
+        "Please load a Seurat RDS obj to select identification",
+        easyClose = FALSE,
+        footer = actionButton("close_modal", "Close")
       ))
       
       return()
@@ -2131,14 +2823,14 @@ server <- function(input, output, session) {
     }
     
     showModal(modalDialog(
-      title = "sample identification select",
+      title = "sample/celltype identification select",
       
       tagList(
         
         # ====== select sample column ======
         selectInput(
           inputId = "sample_ident_col",
-          label   = "Sample identification column",
+          label   = "Sample/celltype identification column",
           choices = sample_cols,
           selected = rv$visualization_sample_column
         ),
@@ -2148,7 +2840,7 @@ server <- function(input, output, session) {
       ),
       
       footer = tagList(
-        modalButton("Cancel"),
+        actionButton("close_modal", "Close"),
         actionButton("confirm_sample_ident", "Confirm", class = "btn-primary")
       ),
       easyClose = FALSE
@@ -2191,9 +2883,2118 @@ server <- function(input, output, session) {
     req(rv$data_obj)
     
     rv$visualization_sample_column <- input$sample_ident_col
-    
+    rv$ui_freeze = FALSE
     removeModal()
   })
+  
+  # ----------------- VISUALIZATION FUNCTION Pathway Select ----------------- 
+  observeEvent(input$pathway_select_btn, {
+    rv$ui_freeze = TRUE
+    showModal(
+      modalDialog(
+        title = "Selection of pathways for analysis",
+        size = "l",
+        easyClose = FALSE,
+        
+        fluidRow(
+          column(
+            width = 6,
+            textAreaInput(
+              inputId = "pathway_text",
+              label = "Pathway List:",
+              value = rv$visualization_pathway,
+              rows = 20,
+              placeholder = "Pathway_ID_1\nPathway_ID_2",
+              width = "100%"
+            ),
+            actionButton(
+              "clear_pathway",
+              "Clear All Pathways",
+              class = "btn-danger",
+              width = "100%"
+            )
+          ),
+          column(
+            width = 6,
+            tagList(
+              # --- Marker count ---
+              tags$div(
+                style = "margin-bottom: 10px; display: flex; align-items: center; gap: 6px;",
+                tags$span("Current Number of Pathways:"),
+                tags$span(
+                  style = "color: red; font-weight: bold;",
+                  textOutput("pathway_count")
+                )
+              ),
+              # =========================
+              # CASE 1: GSEA NOT AVAILABLE
+              # =========================
+              conditionalPanel(
+                condition = "output.gsea_available == false",
+                
+                tags$div(
+                  style = "padding: 15px; color: #777;",
+                  tags$h5("GSEA not loaded"),
+                  tags$p("Upload GSEA file to enable advanced pathway selection.")
+                )
+              ),
+              
+              # =========================
+              # CASE 2: GSEA AVAILABLE
+              # =========================
+              conditionalPanel(
+                condition = "output.gsea_available == true",
+                
+                # --- DEG button ---
+                actionButton(
+                  "use_gsea_table_btn",
+                  "Use GSEA file to search for pathways",
+                  class = "btn btn-primary",
+                  width = "100%"
+                ),
+                
+                tags$hr(),
+                
+                # ---- Top N NES ----
+                fluidRow(
+                  column(8,
+                         numericInput("top_n_nes", "Top N |NES|:", 20, min = 1)
+                  ),
+                  column(4,
+                         br(),
+                         actionButton("apply_top_n_nes", "Apply", class = "btn-success")
+                  )
+                ),
+                
+                # ---- NES threshold ----
+                fluidRow(
+                  column(8,
+                         numericInput("nes_threshold", "|NES| >", 1.5)
+                  ),
+                  column(4,
+                         br(),
+                         actionButton("apply_nes", "Apply", class = "btn-success")
+                  )
+                ),
+                
+                # ---- pvalue ----
+                fluidRow(
+                  column(8,
+                         numericInput("gsea_pval", "pvalue <", 0.05)
+                  ),
+                  column(4,
+                         br(),
+                         actionButton("apply_gsea_pval", "Apply", class = "btn-success")
+                  )
+                ),
+                # =========================
+                # 4. log2fc
+                # =========================
+                # ---- padj ----
+                fluidRow(
+                  column(8,
+                         numericInput("gsea_padj", "p.adjust <", 0.05)
+                  ),
+                  column(4,
+                         br(),
+                         actionButton("apply_gsea_padj", "Apply", class = "btn-success")
+                  )))))),
+        footer = actionButton("close_modal", "Close")
+      ))
+  })
+  
+  observeEvent(input$pathway_text, {
+    
+    lines <- unlist(strsplit(input$pathway_text, "\n"))
+    
+    lines <- lines[trimws(lines) != ""]
+    
+    rv$visualization_pathway <- paste(lines, collapse = "\n")
+    rv$pathway_rename <- data.frame(
+      original_pathway = lines,
+      renamed_pathway = lines |>
+        gsub("^[^_]+_", "", x = _) |>
+        gsub("_", " ", x = _) |>
+        str_to_title()
+    )
+  }, ignoreInit = TRUE)
+  
+  observeEvent(input$clear_pathway, {
+    rv$visualization_pathway <- ""
+    
+    updateTextAreaInput(
+      session,
+      "pathway_text",
+      value = ""
+    )
+  })
+  
+  output$gsea_available <- reactive({
+    !is.null(rv$gsea_obj)
+  })
+  
+  outputOptions(output, "gsea_available", suspendWhenHidden = FALSE)
+  
+  output$pathway_count <- renderText({
+    if (is.null(rv$visualization_pathway) || rv$visualization_pathway == "") {
+      return(0)
+    }
+    length(strsplit(rv$visualization_pathway, "\n")[[1]])
+  })
+  #top n NES
+  observeEvent(input$apply_top_n_nes, {
+    req(rv$gsea_obj)
+    df <- rv$gsea_obj
+    
+    df <- df[order(abs(df$NES), decreasing = TRUE), ]
+    df2 <- head(df, input$top_n_nes)
+    
+    rv$visualization_pathway <- paste(df2$ID, collapse = "\n")
+    
+    updateTextAreaInput(session, "pathway_text", value = rv$visualization_pathway)
+  })
+  
+  # abs NES >
+  observeEvent(input$apply_nes, {
+    req(rv$gsea_obj)
+    df <- rv$gsea_obj
+    
+    df2 <- df[abs(df$NES) > input$nes_threshold, ]
+    
+    rv$visualization_pathway <- paste(df2$ID, collapse = "\n")
+    
+    updateTextAreaInput(session, "pathway_text", value = rv$visualization_pathway)
+  })
+  
+  #pvalue <
+  observeEvent(input$apply_gsea_pval, {
+    req(rv$gsea_obj)
+    df <- rv$gsea_obj
+    
+    df2 <- df[df$pvalue < input$gsea_pval, ]
+    
+    rv$visualization_pathway <- paste(df2$ID, collapse = "\n")
+    
+    updateTextAreaInput(session, "pathway_text", value = rv$visualization_pathway)
+  })
+  
+  #p.adjust <
+  observeEvent(input$apply_gsea_padj, {
+    req(rv$gsea_obj)
+    df <- rv$gsea_obj
+    
+    df2 <- df[df$p.adjust < input$gsea_padj, ]
+    
+    rv$visualization_pathway <- paste(df2$ID, collapse = "\n")
+    
+    updateTextAreaInput(session, "pathway_text", value = rv$visualization_pathway)
+  })
+  
+  # select marker on gsea file
+  observeEvent(input$use_gsea_table_btn, {
+    library(DT)
+    req(rv$gsea_obj)
+    
+    showModal(
+      modalDialog(
+        title = "Select Genes from GSEA",
+        size = "l",
+        easyClose = FALSE,
+        
+        DT::DTOutput("gsea_table"),
+        
+        footer = tagList(
+          actionButton(
+            "confirm_gsea_pathway",
+            "Confirm Selection",
+            class = "btn btn-primary"
+          ),
+          actionButton("close_modal", "Close")
+        )
+      )
+    )
+  })
+  
+  output$gsea_table <- DT::renderDT({
+    
+    req(rv$gsea_obj)
+    
+    df <- rv$gsea_obj
+    
+    selected_pathway_name <- character(0)
+    
+    if (!is.null(rv$visualization_pathway) && rv$visualization_pathway != "") {
+      selected_pathway_name <- unlist(strsplit(rv$visualization_pathway, "\n"))
+      selected_pathway_name <- trimws(selected_pathway_name)
+    }
+    
+    valid_idx <- which(df$ID %in% selected_pathway_name)
+    
+    # -------------------------
+    # select columns to show
+    # -------------------------
+    df_show <- df[, !(colnames(df) %in% c(
+      "Description",
+      "enrichmentScore",
+      "qvalue",
+      "rank",
+      "leading_edge"
+    )), drop = FALSE]
+    
+    df_show$core_enrichment <- ifelse(
+      nchar(df_show$core_enrichment) > 100,
+      paste0(substr(df_show$core_enrichment, 1, 100), "..."),
+      df_show$core_enrichment
+    )
+    
+    DT::datatable(
+      df_show,
+      class = "compact",
+      
+      selection = list(
+        mode = "multiple",
+        selected = valid_idx
+      ),
+      
+      filter = "top",
+      
+      options = list(
+        pageLength = 15,
+        
+        lengthMenu = list(
+          c(10, 15, 20, 30, 50),
+          c("10", "15", "20", "30", "50")
+        ),
+        
+        scrollX = TRUE
+      )
+    ) %>%
+      DT::formatRound(
+        c("NES", "pvalue", "p.adjust"),
+        2
+      )
+  })
+  
+  get_selected_pathways <- function() {
+    
+    req(rv$gsea_obj)
+    
+    sel_idx <- input$gsea_table_rows_selected
+    
+    if (is.null(sel_idx) || length(sel_idx) == 0) {
+      return(character(0))
+    }
+    
+    rv$gsea_obj$ID[sel_idx]
+  }
+  
+  observeEvent(input$confirm_gsea_pathway, {
+    pathways <- get_selected_pathways()
+    # ---- Update reactive value ----
+    rv$visualization_pathway <- paste(pathways, collapse = "\n")
+    # ---- Sync back to textarea ----
+    updateTextAreaInput(
+      session,
+      "pathway_text",
+      value = rv$visualization_pathway
+    )
+    rv$ui_freeze = TRUE
+    showModal(
+      modalDialog(
+        title = "Selection of pathways for analysis",
+        size = "l",
+        easyClose = FALSE,
+        
+        fluidRow(
+          column(
+            width = 6,
+            textAreaInput(
+              inputId = "pathway_text",
+              label = "Pathway List:",
+              value = rv$visualization_pathway,
+              rows = 20,
+              placeholder = "Pathway_ID_1\nPathway_ID_2",
+              width = "100%"
+            ),
+            actionButton(
+              "clear_pathway",
+              "Clear All Pathways",
+              class = "btn-danger",
+              width = "100%"
+            )
+          ),
+          column(
+            width = 6,
+            tagList(
+              # --- Marker count ---
+              tags$div(
+                style = "margin-bottom: 10px; display: flex; align-items: center; gap: 6px;",
+                tags$span("Current Number of Pathways:"),
+                tags$span(
+                  style = "color: red; font-weight: bold;",
+                  textOutput("pathway_count")
+                )
+              ),
+              # =========================
+              # CASE 1: GSEA NOT AVAILABLE
+              # =========================
+              conditionalPanel(
+                condition = "output.gsea_available == false",
+                
+                tags$div(
+                  style = "padding: 15px; color: #777;",
+                  tags$h5("GSEA not loaded"),
+                  tags$p("Upload GSEA file to enable advanced pathway selection.")
+                )
+              ),
+              
+              # =========================
+              # CASE 2: GSEA AVAILABLE
+              # =========================
+              conditionalPanel(
+                condition = "output.gsea_available == true",
+                
+                # --- DEG button ---
+                actionButton(
+                  "use_gsea_table_btn",
+                  "Use GSEA file to search for pathways",
+                  class = "btn btn-primary",
+                  width = "100%"
+                ),
+                
+                tags$hr(),
+                
+                # ---- Top N NES ----
+                fluidRow(
+                  column(8,
+                         numericInput("top_n_nes", "Top N |NES|:", 20, min = 1)
+                  ),
+                  column(4,
+                         br(),
+                         actionButton("apply_top_n_nes", "Apply", class = "btn-success")
+                  )
+                ),
+                
+                # ---- NES threshold ----
+                fluidRow(
+                  column(8,
+                         numericInput("nes_threshold", "|NES| >", 1.5)
+                  ),
+                  column(4,
+                         br(),
+                         actionButton("apply_nes", "Apply", class = "btn-success")
+                  )
+                ),
+                
+                # ---- pvalue ----
+                fluidRow(
+                  column(8,
+                         numericInput("gsea_pval", "pvalue <", 0.05)
+                  ),
+                  column(4,
+                         br(),
+                         actionButton("apply_gsea_pval", "Apply", class = "btn-success")
+                  )
+                ),
+                # =========================
+                # 4. log2fc
+                # =========================
+                # ---- padj ----
+                fluidRow(
+                  column(8,
+                         numericInput("gsea_padj", "p.adjust <", 0.05)
+                  ),
+                  column(4,
+                         br(),
+                         actionButton("apply_gsea_padj", "Apply", class = "btn-success")
+                  )))))),
+        footer = actionButton("close_modal", "Close")
+      ))
+  })
+  
+  # ----------------- VISUALIZATION FUNCTION Pathway Rename -----------------
+  observeEvent(input$pathway_rename_btn, {
+    req(rv$visualization_pathway != "")
+    req(rv$pathway_rename)
+    
+    rv$ui_freeze <- TRUE
+    
+    showModal(
+      modalDialog(
+        title = "Rename Pathways",
+        
+        div(
+          style = "
+        max-height: 70vh;
+        overflow-y: auto;
+        overflow-x: auto;
+        white-space: nowrap;
+      ",
+          uiOutput("pathway_rename_ui")
+        ),
+        
+        footer = tagList(
+          actionButton("apply_pathway_rename", "Apply", class = "btn-success", width = "200px"),
+          actionButton("close_modal", "Close")
+        ),
+        size = "l",
+        easyClose = FALSE
+      )
+    )
+  })
+  
+  output$pathway_rename_ui <- renderUI({
+    
+    req(rv$pathway_rename)
+    
+    df <- rv$pathway_rename
+    
+    tagList(
+      
+      tags$table(
+        id = "rename_table",  
+        style = "width: auto; border-collapse: collapse; table-layout: fixed; border-spacing: 0;",
+        
+        # ===== header =====
+        tags$thead(
+          tags$tr(
+            style = "border-bottom: 1px solid #ddd; font-weight: 700;",
+            tags$th(
+              style = "padding: 8px 20px 8px 0; white-space: nowrap; text-align: left;",
+              "Original Pathway"
+            ),
+            tags$th(
+              style = "padding: 8px 0; white-space: nowrap; text-align: left;",
+              "Renamed Pathway"
+            )
+          )
+        ),
+        
+        # ===== body =====
+        tags$tbody(
+          lapply(seq_len(nrow(df)), function(i) {
+            tags$tr(
+              style = "margin: 0; padding: 0;", 
+              tags$td(
+                style = "margin: 0; padding: 0; white-space: nowrap; color: #666; font-size: 13px;",
+                df$original_pathway[i]
+              ),
+              tags$td(
+                style = "margin: 0; padding-top: 10px;",  
+                textInput(
+                  inputId = paste0("rename_", i),
+                  label = NULL,
+                  value = df$renamed_pathway[i],
+                  width = "100%"
+                )
+              )
+            )
+          })
+        )
+      ),
+      
+      tags$script(HTML("
+      (function() {
+        setTimeout(function() {
+          var table = document.getElementById('rename_table');
+          if (!table) {
+            console.warn('Table not found');
+            return;
+          }
+          
+          var firstColCells = table.querySelectorAll('tr th:first-child, tr td:first-child');
+          if (firstColCells.length === 0) return;
+          
+          var maxWidth = 0;
+          firstColCells.forEach(function(cell) {
+            var width = cell.offsetWidth;
+            if (width > maxWidth) maxWidth = width;
+          });
+          
+          maxWidth = maxWidth + 10;
+          table.style.tableLayout = 'fixed';
+          
+          var rows = table.querySelectorAll('tr');
+          rows.forEach(function(row) {
+            var cells = row.querySelectorAll('th, td');
+            if (cells.length >= 2) {
+              cells[0].style.width = maxWidth + 'px';
+              cells[0].style.minWidth = maxWidth + 'px';
+              cells[0].style.maxWidth = maxWidth + 'px';
+              cells[0].style.whiteSpace = 'nowrap';
+              cells[1].style.width = maxWidth + 'px';
+              cells[1].style.minWidth = maxWidth + 'px';
+              cells[1].style.maxWidth = maxWidth + 'px';
+            }
+          });
+          
+          var inputs = table.querySelectorAll('input');
+          inputs.forEach(function(input) {
+            input.style.width = '100%';
+            input.style.boxSizing = 'border-box';
+          });
+          
+        }, 150);
+      })();
+    "))
+    )
+  })
+  
+  observeEvent(input$apply_pathway_rename, {
+    
+    req(rv$pathway_rename)
+    
+    df <- rv$pathway_rename
+    
+    new_names <- sapply(seq_len(nrow(df)), function(i) {
+      input[[paste0("rename_", i)]]
+    })
+    
+    rv$pathway_rename$renamed_pathway <- new_names
+    
+    rv$pathway_map <- setNames(
+      rv$pathway_rename$renamed_pathway,
+      rv$pathway_rename$original_pathway
+    )
+    
+    removeModal()
+    rv$ui_freeze <- FALSE
+  })
+  # ----------------- VISUALIZATION FUNCTION Original Violin Plot -----------------
+  output$original_violin_plot <- renderPlot({
+    
+    req(rv$data_obj)
+    req(rv$visualization_marker)
+    req(rv$visualization_sample_column != "")
+    req(!rv$ui_freeze)
+    
+    markers <- unlist(strsplit(rv$visualization_marker, "\n"))
+    markers <- trimws(markers)
+    markers <- markers[markers != "" & !is.na(markers)]
+    valid_genes <- rownames(rv$data_obj)
+    
+    genes <- markers[markers %in% valid_genes][1]
+    VlnPlot(
+      rv$data_obj,
+      features = genes,
+      group.by = rv$visualization_sample_column,
+      pt.size = if (input$v_show_points) 0.5 else 0
+    ) +
+      ggplot2::labs(
+        title = paste0(genes,"_example"),
+        x = rv$visualization_sample_column,
+        y = "Expression"
+      ) +
+      ggplot2::theme(
+        axis.title.x = ggplot2::element_text(size = input$v_x_lab_size),
+        axis.title.y = ggplot2::element_text(size = input$v_y_lab_size),
+        axis.text.x = ggplot2::element_text(
+          size = input$v_x_text_size,
+          angle = input$v_angle, 
+          hjust = 0.5, vjust = 0.5
+        ),
+        axis.text.y = ggplot2::element_text(
+          size = input$v_y_text_size
+        ),
+        plot.title = ggplot2::element_text(
+          size = input$v_title_size,
+          hjust = 0.5
+        ),
+        
+        legend.position = "none"
+      )
+  })
+  
+  observeEvent(input$generate_all_violin, {
+    
+    req(rv$data_obj)
+    
+    showModal(modalDialog(
+      title = "Processing Markers",
+      
+      tags$div(
+        id = "violin_progress_detail",
+        "Starting..."
+      ),
+      
+      easyClose = FALSE,
+      footer = NULL
+    ))
+    
+    markers <- unlist(strsplit(rv$visualization_marker, "\n"))
+    markers <- trimws(markers)
+    markers <- markers[markers != "" & !is.na(markers)]
+    valid_genes <- rownames(rv$data_obj)
+    
+    markers <- markers[markers %in% valid_genes]
+    if (length(markers) == 0) {
+      
+      removeModal()
+      
+      showNotification(
+        "No valid markers found in Seurat object",
+        type = "error"
+      )
+      
+      return()
+    }
+    
+    total <- length(markers)
+    
+    out_dir <- input$violin_save_path
+    if (!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE)
+    generated_files <- c()
+    for (i in seq_along(markers)) {
+      
+      genes <- markers[i]
+      
+      done <- i - 1
+      remaining <- total - i + 1
+      
+      # =========================
+      #  REAL-TIME MODAL UPDATE
+      # =========================
+      shinyjs::html(
+        "violin_progress_detail",
+        paste0(
+          "<b>Processing marker:</b> ", genes, "<br>",
+          "Completed: ", done, "<br>",
+          "Remaining: ", remaining
+        )
+      )
+      
+      Sys.sleep(0.01) 
+      file_path <- file.path(out_dir, paste0(genes, ".pdf"))
+      pdf(file_path,
+          width = input$v_width,
+          height = input$v_height)
+      
+      print(
+        VlnPlot(
+          rv$data_obj,
+          features = genes,
+          group.by = rv$visualization_sample_column,
+          pt.size = if (input$v_show_points) 0.5 else 0
+        ) +
+          ggplot2::labs(
+            title = genes,
+            x = rv$visualization_sample_column,
+            y = "Expression"
+          ) +
+          ggplot2::theme(
+            axis.title.x = ggplot2::element_text(size = input$v_x_lab_size),
+            axis.title.y = ggplot2::element_text(size = input$v_y_lab_size),
+            axis.text.x = ggplot2::element_text(
+              size = input$v_x_text_size,
+              angle = input$v_angle, 
+              hjust = 0.5, vjust = 0.5
+            ),
+            axis.text.y = ggplot2::element_text(
+              size = input$v_y_text_size
+            ),
+            plot.title = ggplot2::element_text(
+              size = input$v_title_size,
+              hjust = 0.5
+            ),
+            
+            legend.position = "none"
+          )
+      )
+      
+      dev.off()
+      generated_files <- c(generated_files, file_path)
+    }
+    
+    rv$violin_files <- generated_files
+    removeModal()
+    
+    showNotification("All violin plots generated!", type = "message")
+  })
+  
+  output$download_violin <- downloadHandler(
+    
+    filename = function() {
+      "violin_plots.zip"
+    },
+    
+    content = function(file) {
+      
+      files <- rv$violin_files
+      
+      if (is.null(files) || length(files) == 0) {
+        
+        showNotification(
+          "No violin plots generated yet.",
+          type = "error",
+          duration = 5
+        )
+        
+        return(NULL)
+      }
+      
+      old <- getwd()
+      on.exit(setwd(old), add = TRUE)
+      
+      setwd(dirname(files[1]))
+      
+      zip::zip(
+        zipfile = file,
+        files = basename(files)
+      )
+      
+      showNotification(
+        "Violin plots downloaded successfully.",
+        type = "message",
+        duration = 3
+      )
+    }
+  )
+  
+  # ----------------- VISUALIZATION FUNCTION Stack Violin Plot -----------------
+  observeEvent(input$set_group_gene, {
+    
+    req(rv$data_obj)
+    req(rv$visualization_sample_column)
+    rv$ui_freeze = TRUE
+    groups <- unique(rv$data_obj@meta.data[[rv$visualization_sample_column]])
+    
+    if (!is.null(rv$gene_grouping)) {
+      colors <- sapply(seq_along(groups), function(i) {
+        g <- groups[i]
+        idx <- which(sapply(rv$gene_grouping, function(x) x$group == g))
+        if (length(idx) > 0) rv$gene_grouping[[idx]]$color else color_selected(length(groups))[i]
+      })
+    } else {
+      colors <- color_selected(length(groups))
+    }
+    
+    all_genes <- unique(trimws(unlist(strsplit(rv$visualization_marker, "\n"))))
+    all_genes <- all_genes[all_genes != ""]
+    
+    assigned_genes <- c()
+    
+    group_gene_map <- lapply(seq_along(groups), function(i) {
+      g <- groups[i]
+      
+      if (!is.null(rv$gene_grouping)) {
+        idx <- which(sapply(rv$gene_grouping, function(x) x$group == g))
+        if (length(idx) > 0) {
+          genes <- rv$gene_grouping[[idx]]$genes
+          assigned_genes <<- c(assigned_genes, genes)
+          return(genes)
+        }
+      }
+      
+      return(character(0))
+    })
+    
+    gene_pool <- setdiff(all_genes, assigned_genes)
+    gene_pool <- sort(gene_pool)
+    showModal(modalDialog(
+      title = "Gene Grouping & Color Setting",
+      size = "l",
+      easyClose = FALSE,
+      
+      div(
+        style = "overflow-x: auto; width: 100%; padding-bottom: 10px;",
+        
+        div(
+          style = "display: flex; gap: 20px; margin-bottom: 10px;",
+          lapply(seq_along(groups), function(i) {
+            div(
+              style = "flex: 0 0 200px;",
+              tags$b(groups[i])
+            )
+          })
+        ),
+        
+        div(
+          style = "display: flex; gap: 20px; margin-bottom: 10px;",
+          lapply(seq_along(groups), function(i) {
+            div(
+              style = "width: 200px;",
+              colourInput(
+                inputId = paste0("group_color_", i),
+                label = NULL,
+                value = colors[i]
+              )
+            )
+          })
+        ),
+        div(
+          style = "display: flex; gap: 20px;",
+          lapply(seq_along(groups), function(i) {
+            div(
+              style = "flex: 0 0 200px; border: 1px solid #ddd; padding: 5px;",
+              rank_list(
+                text = NULL,
+                labels = group_gene_map[[i]],
+                input_id = paste0("group_genes_", i),
+                options = sortable_options(
+                  group = "genes_shared",
+                  animation = 150
+                )
+              )
+            )
+          })
+        )
+      ),
+      
+      tags$hr(),
+      
+      tags$h5("Gene Pool (Drag genes into groups)"),
+      
+      div(
+        style = "
+      height: 200px;
+      overflow-y: auto;
+      border: 1px solid #ddd;
+      padding: 5px;
+      background: white;
+    ",
+        
+        rank_list(
+          text = NULL,
+          labels = gene_pool,
+          input_id = "gene_pool",
+          options = sortable_options(
+            group = "genes_shared",
+            animation = 150
+          )
+        )
+      ),
+      
+      footer = tagList(
+        fluidRow(
+          column(12,
+                 actionButton(
+                   "save_group_gene",
+                   "Confirm and Close",
+                   class = "btn-success"
+                 )
+          )
+        )
+      )
+    ))
+  })
+  
+  observeEvent(input$save_group_gene, {
+    
+    req(rv$data_obj)
+    groups <- unique(rv$data_obj@meta.data[[rv$visualization_sample_column]])
+    
+    res <- lapply(seq_along(groups), function(i) {
+      
+      list(
+        group = groups[i],
+        genes = input[[paste0("group_genes_", i)]],
+        color = input[[paste0("group_color_", i)]]
+      )
+    })
+    
+    rv$gene_grouping <- res
+    rv$ui_freeze = FALSE
+    removeModal()
+    
+    showNotification("Gene grouping saved!", type = "message")
+  })
+  
+  stack_violin_plot <- reactive({
+    
+    req(rv$data_obj)
+    req(rv$visualization_marker)
+    req(rv$visualization_sample_column)
+    req(rv$gene_grouping)
+    req(!rv$ui_freeze)
+    genes <- unique(unlist(lapply(rv$gene_grouping, function(x) x$genes)))
+    
+    genes <- trimws(genes)
+    genes <- genes[genes != "" & !is.na(genes)]
+    
+    genes <- genes[genes %in% rownames(rv$data_obj)]
+    
+    validate(
+      need(length(genes) > 0, "No valid genes in gene_grouping")
+    )
+    expr <- GetAssayData(
+      rv$data_obj,
+      assay = "RNA",
+      layer = "data"
+    )[genes, , drop = FALSE]
+    
+    expr <- as.data.frame(t(expr))
+    
+    expr$cluster <- rv$data_obj@meta.data[[rv$visualization_sample_column]]
+    
+    df <- expr %>%
+      tibble::as_tibble() %>%
+      tidyr::pivot_longer(
+        cols = -cluster,
+        names_to = "Feat",
+        values_to = "Expr"
+      )
+    
+    df$Expr <- as.numeric(df$Expr)
+    
+    noise <- rnorm(n = nrow(df), mean = 0, sd = 1e-5)
+    
+    # only add noise if not constant
+    if (!all(df$Expr == df$Expr[1])) {
+      df$Expr <- df$Expr + noise
+    } else {
+      warning("All cells have identical expression for plotted features.")
+    }
+    
+    gene_grouping <- rv$gene_grouping
+    
+    group_map <- do.call(rbind, lapply(gene_grouping, function(g) {
+      
+      if (is.null(g$genes) || length(g$genes) == 0) return(NULL)
+      
+      data.frame(
+        gene = g$genes,
+        group = g$group,
+        color = g$color,
+        stringsAsFactors = FALSE
+      )
+    }))
+    
+    group_map <- group_map[!is.na(group_map$gene), ]
+    
+    df <- dplyr::left_join(df, group_map, by = c("Feat" = "gene"))
+    
+    df$group[is.na(df$group)] <- "Unknown"
+    df$color[is.na(df$color)] <- "#cccccc"
+    df$Feat <- factor(df$Feat, levels = genes)
+    df$cluster <- factor(df$cluster)
+    group_levels <- unique(group_map$group)
+    df$group <- factor(df$group, levels = group_levels)
+    df_com <- group_map
+    
+    df_com$group <- factor(df_com$group, levels = group_levels)
+    df_com$gene <- factor(df_com$gene, levels = unique(df_com$gene))
+    right <- ggplot(df, aes(factor(cluster), Expr, fill = Feat)) + 
+      geom_violin(scale = "width", adjust = 1, trim = TRUE) +
+      scale_y_continuous(expand = c(0, 0), position="right", labels = function(x)
+        c(rep(x = "", times = length(x)-2), x[length(x) - 1], "")) +
+      scale_fill_manual(
+        values = setNames(df$color[match(levels(df$Feat), df$Feat)], levels(df$Feat))
+      ) +
+      facet_grid(rows = vars(Feat), scales = "free_y", switch = "y") +
+      theme_cowplot(font_size = input$stack_violin_y_right_label_size) +# Expression level size 
+      theme(legend.position = "none", panel.spacing = unit(0, "lines"),
+            plot.title = element_blank(),
+            panel.background = element_rect(fill = NA, color = "black"),
+            strip.background = element_blank(),
+            strip.text = element_text(face = "bold"),
+            strip.text.y.left = element_blank(),
+            axis.text.y.right = element_text(size = input$stack_violin_y_right_value_size), # Expression level value size 
+            axis.text.x = element_text(size = input$stack_violin_x_size), # x sample id size
+            axis.title.x =  element_blank(),
+            plot.margin = margin(0, 0, 0, 0, "pt"))  + 
+      xlab(NULL) + ylab("Expression Level")
+    
+    left <- ggplot(df_com, aes(x = 1, y = gene, fill = group, label = group)) + geom_tile(NULL) +
+      geom_text(fontface = "bold", size = input$stack_violin_y_left_sample_size) + # y left sample id size
+      theme_bw(base_size = 12) + 
+      scale_y_discrete(limits = rev, expand = expansion(add = c(0, 0))) +
+      scale_fill_manual(values = setNames(df_com$color, df_com$group)) + 
+      scale_x_continuous(expand = c(0, 0)) +
+      theme(legend.position = "none", panel.spacing = unit(0, "lines"),
+            panel.background = element_blank(), 
+            panel.border = element_blank(),
+            plot.background = element_blank(), 
+            plot.margin = margin(0, 4, 0, 0, "pt"),
+            axis.text.y = element_text(size = input$stack_violin_y_left_gene_size, angle = 0, hjust = 1, vjust = 0.5, color = "black"), # y left gene size
+            axis.title.y = element_text(size = input$stack_violin_y_left_label_size), # y left label size
+            axis.text.x = element_text(size = input$stack_violin_x_size, angle = 0, hjust = 1, vjust = 0.5, color = "white"),
+            axis.title.x = element_blank(),
+            axis.ticks.x = element_blank(),
+            panel.grid = element_blank()) + ylab("Feature") + xlab(NULL) 
+    
+    cowplot::plot_grid(
+      left, right,
+      rel_widths = c(input$stack_violin_left_proportion, 1-input$stack_violin_left_proportion), # left proportion
+      align = "h",
+      axis = "lc"
+    )
+  })
+  
+  output$stack_violin_plot <- renderPlot({
+    req(stack_violin_plot())
+    stack_violin_plot()
+  })
+  
+  observeEvent(input$save_stack_plot, {
+    
+    req(stack_violin_plot())
+    out_dir <- input$stack_save_path
+    if (!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE)
+    out_file <- file.path(
+      out_dir,
+      paste0("stack_violin_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".pdf")
+    )
+    
+    pdf(out_file,
+        width = input$stack_width,
+        height = input$stack_height)
+    
+    print(stack_violin_plot())
+    
+    dev.off()
+    
+    showNotification("Saved stack violin plot", type = "message")
+  })
+  
+  output$download_stack_plot <- downloadHandler(
+    
+    filename = function() {
+      paste0("stack_violin_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".pdf")
+    },
+    
+    content = function(file) {
+      
+      req(stack_violin_plot())
+      pdf(file,
+          width = input$stack_width,
+          height = input$stack_height)
+      
+      print(stack_violin_plot())
+      
+      dev.off()
+    }
+  )
+  # ----------------- VISUALIZATION FUNCTION Dot Plot -----------------
+  dotplot_plot_reactive <- reactive({
+    
+    req(rv$data_obj)
+    req(rv$visualization_marker)
+    req(rv$visualization_sample_column)
+    req(!rv$ui_freeze)
+    
+    genes <- unique(trimws(unlist(strsplit(rv$visualization_marker, "\n"))))
+    genes <- genes[genes != ""]
+    
+    genes <- genes[genes %in% rownames(rv$data_obj)]
+    
+    validate(
+      need(length(genes) > 0, "No valid genes found.")
+    )
+    
+    p <- suppressWarnings(Seurat::DotPlot(
+      object = rv$data_obj,
+      features = genes,
+      group.by = rv$visualization_sample_column,
+      dot.scale = input$dotplot_dot_max_size,
+      scale = input$dotplot_scale,
+    ) +
+      theme(
+        axis.text.x = element_text(
+          angle = input$dotplot_x_rotate,
+          hjust = 1,
+          size = input$dotplot_x_text_size
+        ),
+        axis.text.y = element_text(
+          size = input$dotplot_y_text_size
+        ),
+        legend.position = input$dotplot_legend_position,
+        legend.text = element_text(size = input$dotplot_legend_text_size),
+        legend.title = element_text(size = input$dotplot_legend_title_size),
+        legend.key.size = unit(input$dotplot_legend_key_size, "cm")
+      ) +
+      labs(
+        x = NULL,
+        y = NULL,
+        title = NULL
+      ))
+    
+    p
+  })
+  
+  output$dotplot_plot <- renderPlot({
+    req(dotplot_plot_reactive())
+    req(!rv$ui_freeze)
+    dotplot_plot_reactive()
+  })
+  
+  observeEvent(input$save_dotplot, {
+    
+    req(dotplot_plot_reactive())
+    req(input$dotplot_save_path)
+    
+    out_dir <- input$dotplot_save_path
+    if (!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE)
+    
+    out_file <- file.path(out_dir,
+                          paste0("dotplot_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".pdf"))
+    
+    pdf(out_file,
+        width = input$dotplot_width,
+        height = input$dotplot_height)
+    
+    print(dotplot_plot_reactive())
+    
+    dev.off()
+    
+    showNotification("Saved volcano plot", type = "message")
+  })
+  
+  output$download_dotplot <- downloadHandler(
+    
+    filename = function() {
+      paste0("dotplot_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".pdf")
+    },
+    
+    content = function(file) {
+      
+      req(dotplot_plot_reactive())
+      
+      pdf(file,
+          width = input$dotplot_width,
+          height = input$dotplot_height)
+      
+      print(dotplot_plot_reactive())
+      
+      dev.off()
+    }
+  )
+  # ----------------- VISUALIZATION FUNCTION Original Volcano Plot -----------------
+  
+  volcano_plot_reactive <- reactive({
+    
+    req(rv$deg_obj)
+    req(!rv$ui_freeze)
+    
+    volcanoplot <- function(de, labeled_genes, ylimit = 150, xlimit = 5,  
+                            pvalue_limit = 0.05, log2FC_limit = 0.25, 
+                            size_point = 0.8, size_labeled_gene = 3,
+                            text_size = 10, title_size = 10) {
+      
+      de$p_val_adj <- pmax(de$pvalue_1, 1e-300)  
+      de <- de[!(de$intensity_1 == 0 & de$intensity_2 == 0), ]
+      de$neg_log_pval <- -log10(de$p_val_adj)
+      
+      de$diffexpressed <- "NO"
+      
+      de$diffexpressed[de$log2FC < -log2FC_limit & de$pvalue_1 < pvalue_limit] <- "DOWN"
+      de$diffexpressed[de$log2FC > log2FC_limit & de$pvalue_1 < pvalue_limit] <- "UP"
+      
+      de$gene <- trimws(de$gene) 
+      labeled_genes <- trimws(labeled_genes)  
+      
+      de$delabel <- if (input$original_volcano_auto_label) {
+        ifelse(de$diffexpressed != "NO", de$gene, NA)
+      } else {
+        ifelse(de$gene %in% labeled_genes & de$diffexpressed != "NO",
+               de$gene, NA)
+      }
+      ggplot(data = de, aes(x = log2FC, y = neg_log_pval, col = diffexpressed, label = delabel)) +
+        geom_vline(xintercept = c(-log2FC_limit, log2FC_limit), col = "gray", linetype = 'dashed') +
+        geom_hline(yintercept = -log10(pvalue_limit), col = "gray", linetype = 'dashed') +
+        geom_point(data = de %>% dplyr::filter(diffexpressed == "DOWN"), color = "#00AFBB", size = size_point, alpha = 0.5) +
+        geom_point(data = de %>% dplyr::filter(diffexpressed == "UP"), color = "#bb0c00", size = size_point, alpha = 0.5) +
+        geom_point(data = de %>% dplyr::filter(diffexpressed == "NO"), color = "gray", size = size_point, alpha = 0.5) +
+        geom_text_repel(show.legend  = FALSE, 
+                        box.padding = 0.3, 
+                        min.segment.length = 0.1, 
+                        direction = "both", 
+                        segment.color = 'darkgray', 
+                        max.overlaps = 20, 
+                        size = size_labeled_gene, 
+                        fontface = "bold.italic",
+                        na.rm = TRUE) +
+        scale_color_manual(values = c("DOWN" = "black", "UP" = "black")) +
+        coord_cartesian(xlim = c(-xlimit, xlimit), ylim = c(0, ylimit)) +
+        labs(x = expression("CONTROL <- log"[2]*"FC -> TREATMENT"), 
+             y = expression("-log"[10]*"p-value")) +
+        theme_bw() +
+        theme(
+          axis.text = element_text(size = text_size),
+          axis.title = element_text(size = title_size, face = "bold"),
+          legend.position = "none"
+        )
+    }
+    
+    labeled_genes <- unique(trimws(unlist(strsplit(rv$visualization_marker, "\n"))))
+    labeled_genes <- labeled_genes[labeled_genes != ""]
+    
+    volcanoplot(
+      de = rv$deg_obj, 
+      labeled_genes = labeled_genes, 
+      ylimit = input$original_volcano_ylimit,
+      xlimit = input$original_volcano_xlimit,
+      pvalue_limit = input$original_volcano_pvalue_limit,
+      log2FC_limit = input$original_volcano_log2FC_limit,
+      size_point = input$original_volcano_size_point,
+      size_labeled_gene = input$original_volcano_size_label,
+      text_size = input$original_volcano_text_size,
+      title_size = input$original_volcano_title_size
+    )
+  })
+  
+  output$volcano_plot <- renderPlot({
+    req(volcano_plot_reactive())
+    req(!rv$ui_freeze)
+    volcano_plot_reactive()
+  })
+  
+  observeEvent(input$save_original_volcano_plot, {
+    
+    req(volcano_plot_reactive())
+    req(input$original_volcano_save_path)
+    
+    out_dir <- input$original_volcano_save_path
+    if (!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE)
+    
+    out_file <- file.path(out_dir,
+                          paste0("volcano(gene)_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".pdf"))
+    
+    pdf(out_file,
+        width = input$original_volcano_width,
+        height = input$original_volcano_height)
+    
+    print(volcano_plot_reactive())
+    
+    dev.off()
+    
+    showNotification("Saved volcano(gene) plot", type = "message")
+  })
+  
+  output$download_original_volcano_plot <- downloadHandler(
+    
+    filename = function() {
+      paste0("volcano(gene)_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".pdf")
+    },
+    
+    content = function(file) {
+      
+      req(volcano_plot_reactive())
+      
+      pdf(file,
+          width = input$original_volcano_width,
+          height = input$original_volcano_height)
+      
+      print(volcano_plot_reactive())
+      
+      dev.off()
+    }
+  )
+  # ----------------- VISUALIZATION FUNCTION Pathway Volcano Plot (Single) -----------------
+
+  pathway_volcano_plot_reactive <- reactive({
+
+    req(rv$deg_obj)
+    req(rv$gsea_obj)
+    req(rv$visualization_pathway != "")
+    req(rv$pathway_rename)
+    req(!rv$ui_freeze)
+
+    selected_pathway <- strsplit(
+      rv$visualization_pathway,
+      "\n"
+    )[[1]]
+
+    selected_pathway <- selected_pathway[
+      selected_pathway != ""
+    ]
+    if (length(selected_pathway) > 30) {
+
+      return(
+        list(
+          type = "message",
+          content = paste0(
+            "Error: Too many pathways selected (>30). ",
+            "Please reduce selection."
+          )
+        )
+      )
+    }
+    
+    if(sum(rv$gsea_obj$ID %in% selected_pathway) == 0){
+      return(
+        list(
+          type = "message",
+          content = paste0(
+            "Error: No matched pathway. ",
+            "Please check the pathway name input."
+          )
+        )
+      )
+    }
+
+    selected_pathway <- intersect(
+      selected_pathway,
+      rv$gsea_obj$ID
+    )
+
+    draw_pathway_volcano <- function(
+    deg,
+    gsea,
+    selected_pathway,
+    pathway_rename,
+    pvalue_limit = 0.05,
+    log2FC_limit = 0.25,
+    top_n_label = 10,
+    point_size = 2.5,
+    label_size = 3,
+    axis_title_size = 14,
+    axis_text_size = 12,
+    legend_position = "right",
+    legend_text_size = 11
+    ) {
+      
+      library(dplyr)
+      library(tidyr)
+      library(ggplot2)
+      library(ggrepel)
+      library(scales)
+      library(scatterpie)
+      
+      deg <- deg %>%
+        mutate(
+          p_val_adj = pmax(pvalue_1, 1e-300),
+          neg_log_pval = -log10(p_val_adj)
+        )
+      
+      marker_df <- gsea %>%
+        filter(ID %in% selected_pathway) %>%
+        select(ID, core_enrichment) %>%
+        mutate(gene = strsplit(core_enrichment, "/")) %>%
+        unnest(gene) %>%
+        rename(pathway = ID)
+      
+      rename_map <- setNames(
+        pathway_rename$renamed_pathway,
+        pathway_rename$original_pathway
+      )
+      
+      marker_df <- marker_df %>%
+        mutate(pathway = unname(rename_map[pathway]))
+      
+      pathway_cols <- unique(marker_df$pathway)
+      
+      pie_df <- marker_df %>%
+        distinct(gene, pathway) %>%
+        mutate(value = 1) %>%
+        group_by(gene) %>%
+        mutate(value = value / n()) %>%
+        ungroup() %>%
+        pivot_wider(
+          names_from = pathway,
+          values_from = value,
+          values_fill = 0
+        )
+      
+      plot_df <- pie_df %>%
+        inner_join(deg, by = "gene") %>%
+        mutate(
+          n_pathway = rowSums(across(all_of(pathway_cols)) > 0),
+          significant = (p_val_adj < pvalue_limit &
+                           abs(log2FC) > log2FC_limit)
+        )
+      
+      label_df <- plot_df %>%
+        filter(significant) %>%
+        arrange(desc(neg_log_pval)) %>%
+        slice_head(n = top_n_label)
+      
+      label_df$label_color <- "black"
+      
+      pathway_colors <- setNames(
+        hue_pal()(length(pathway_cols)),
+        pathway_cols
+      )
+      
+      xlim <- max(abs(plot_df$log2FC), na.rm = TRUE) + 2
+      ylim <- max(plot_df$neg_log_pval, na.rm = TRUE) + 1
+      
+      p <- ggplot() +
+        
+      scatterpie::geom_scatterpie(
+        data = plot_df,
+        aes(x = log2FC, y = neg_log_pval),
+        cols = pathway_cols,
+        pie_scale = point_size,
+        color = NA,
+        alpha = 0.9
+      ) +
+        
+      geom_point(
+        data = plot_df,
+        aes(x = log2FC, y = neg_log_pval),
+        alpha = 0,   # invisible but REAL geometry
+        size = 0.5
+      ) +
+        
+      geom_text_repel(
+        data = label_df,
+        aes(x = log2FC, y = neg_log_pval, label = gene),
+        size = label_size,
+        fontface = "bold.italic",
+        segment.color = "gray40",
+        segment.size = 0.4,
+        min.segment.length = 0,   
+        box.padding = 1,
+        point.padding = 0,
+        force = 2,               
+        force_pull = 1,
+        max.overlaps = Inf,
+        seed = 123,
+        show.legend = FALSE
+      ) +
+        
+        # thresholds
+        geom_hline(yintercept = -log10(pvalue_limit),
+                   linetype = "dashed",
+                   color = "gray") +
+        geom_vline(xintercept = c(-log2FC_limit, log2FC_limit),
+                   linetype = "dashed",
+                   color = "gray") +
+        
+        coord_cartesian(      
+          xlim = c(-xlim, xlim),
+          ylim = c(0, ylim)) +
+        
+        scale_fill_manual(values = pathway_colors) +
+        
+        labs(
+          x = expression("log"[2] * "FC"),
+          y = expression("-log"[10] * "p-value"),
+          fill = "Pathway"
+        ) +
+        
+        theme_minimal(base_size = 14) +
+        theme(
+          axis.title = element_text(size = axis_title_size),
+          axis.text = element_text(size = axis_text_size),
+          legend.position = legend_position,
+          legend.text = element_text(size = legend_text_size),
+          legend.title = element_text(size = legend_text_size + 1)
+        )
+      
+      return(p)
+    }
+
+    draw_pathway_volcano(
+      deg = rv$deg_obj,
+      gsea = rv$gsea_obj,
+      selected_pathway = selected_pathway,
+      pathway_rename = rv$pathway_rename,
+      pvalue_limit = input$pathway_volcano_pv_limit,
+      log2FC_limit = input$pathway_volcano_log2fc_limit,
+      top_n_label = input$pathway_volcano_label_n,
+      point_size = input$pathway_volcano_point_size,
+      label_size = input$pathway_volcano_label_size,
+      axis_title_size = input$pathway_volcano_axis_title_size,
+      axis_text_size = input$pathway_volcano_axis_text_size,
+      legend_position = input$pathway_volcano_legend_position,
+      legend_text_size = input$pathway_volcano_legend_text_size
+    )
+
+  })
+
+  output$pathway_volcano_plot <- renderPlot({
+    
+    req(pathway_volcano_plot_reactive())
+    req(!rv$ui_freeze)
+    res <- pathway_volcano_plot_reactive()
+    
+    if (is.list(res) && res$type == "message") {
+      
+      plot.new()
+      text(0.5, 0.5, res$content, cex = 1.2, col = "red")
+      
+      return()
+    }
+    res
+  })
+  
+  observeEvent(input$save_pathway_volcano, {
+    
+    req(pathway_volcano_plot_reactive())
+    req(input$pathway_volcano_save_path)
+    
+    out_dir <- input$pathway_volcano_save_path
+    if (!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE)
+    
+    out_file <- file.path(
+      out_dir,
+      paste0("volcano(pathway)_multi_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".pdf")
+    )
+    
+    pdf(out_file,
+        width = input$pathway_volcano_pdf_width,
+        height = input$pathway_volcano_pdf_height)
+    
+    print(pathway_volcano_plot_reactive())
+    
+    dev.off()
+    
+    showNotification("Saved volcano(pathway) plot", type = "message")
+  })
+  
+  output$download_pathway_volcano <- downloadHandler(
+    
+    filename = function() {
+      paste0("volcano(pathway)_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".pdf")
+    },
+    
+    content = function(file) {
+      
+      req(pathway_volcano_plot_reactive())
+      
+      pdf(file,
+          width = input$pathway_volcano_pdf_width,
+          height = input$pathway_volcano_pdf_height)
+      
+      print(pathway_volcano_plot_reactive())
+      
+      dev.off()
+    }
+  )
+  # ----------------- VISUALIZATION FUNCTION Pathway Volcano Plot (Multi) -----------------
+  draw_pathway_volcano_single <- function(deg,
+                                          gsea,
+                                          selected_pathway,
+                                          pathway_rename,
+                                          pathway_color = "#E64B35",
+                                          pvalue_limit = 0.05,
+                                          log2FC_limit = 0.25,
+                                          top_n_label = 10,
+                                          point_size = 2.5,
+                                          label_size = 3,
+                                          axis_title_size = 14,
+                                          axis_text_size = 12,
+                                          legend_position = "none",
+                                          legend_text_size = 11,
+                                          xlim = NULL,
+                                          ylim = NULL) {
+    
+    deg <- deg %>%
+      mutate(
+        p_val_adj = pmax(pvalue_1, 1e-300),
+        neg_log_pval = -log10(p_val_adj)
+      )
+    
+    pathway_name <- pathway_rename %>%
+      filter(original_pathway == selected_pathway) %>%
+      pull(renamed_pathway)
+    
+    if (length(pathway_name) == 0) {
+      pathway_name <- selected_pathway
+    }
+    
+    marker_df <- gsea %>%
+      filter(ID == selected_pathway) %>%
+      select(ID, NES, core_enrichment) %>%
+      mutate(gene = strsplit(core_enrichment, "/")) %>%
+      tidyr::unnest(gene) %>%
+      rename(pathway = ID)
+    
+    plot_df <- marker_df %>%
+      inner_join(deg, by = "gene") %>%
+      mutate(
+        significant = (p_val_adj < pvalue_limit) &
+          (abs(log2FC) > log2FC_limit)
+      )
+    
+    label_candidate_df <- plot_df %>%
+      filter(
+        p_val_adj < pvalue_limit,
+        abs(log2FC) > log2FC_limit
+      )
+    
+    top_label_df <- label_candidate_df %>%
+      arrange(desc(neg_log_pval)) %>%
+      slice_head(n = top_n_label)
+    
+    # =========================
+    # AUTO LIMITS IF NOT GIVEN
+    # =========================
+    
+    if (is.null(xlim)) {
+      xlim <- max(abs(deg$log2FC), na.rm = TRUE) + 0.5
+    }
+    
+    if (is.null(ylim)) {
+      ylim <- max(deg$neg_log_pval, na.rm = TRUE) + 1
+    }
+    
+    p <- ggplot(
+      plot_df,
+      aes(x = log2FC, y = neg_log_pval)
+    ) +
+      
+      geom_point(
+        aes(alpha = significant),
+        color = pathway_color,
+        size = point_size
+      ) +
+      
+      scale_alpha_manual(
+        values = c("TRUE" = 1, "FALSE" = 0.2),
+        guide = "none"
+      ) +
+      
+      coord_cartesian(
+        xlim = c(-xlim, xlim),
+        ylim = c(0, ylim)
+      ) +
+      
+      geom_hline(
+        yintercept = -log10(pvalue_limit),
+        color = "gray",
+        linetype = "dashed"
+      ) +
+      
+      geom_vline(
+        xintercept = c(-log2FC_limit, log2FC_limit),
+        color = "gray",
+        linetype = "dashed"
+      ) +
+      
+      geom_text_repel(
+        data = top_label_df,
+        aes(label = gene),
+        show.legend = FALSE,
+        box.padding = 0.3,
+        min.segment.length = 0.1,
+        direction = "both",
+        segment.color = "darkgray",
+        max.overlaps = 20,
+        size = label_size,
+        na.rm = TRUE,
+        fontface = "bold.italic"
+      ) +
+      
+      labs(
+        title = pathway_name,
+        x = expression("CONTROL <- log"[2] * "FC -> TREATMENT"),
+        y = expression("-log"[10] * "p-value")
+      ) +
+      
+      theme_minimal(base_size = 14) +
+      
+      theme(
+        axis.title = element_text(size = axis_title_size),
+        axis.text = element_text(size = axis_text_size),
+        legend.position = legend_position,
+        plot.title = element_text(
+          hjust = 0.5,
+          face = "bold"
+        )
+      )
+    
+    return(p)
+  }
+  
+  output$pathway_volcano_multi_plot <- renderPlot({
+    req(rv$deg_obj)
+    req(rv$gsea_obj)
+    req(rv$visualization_pathway!="")
+    req(rv$pathway_rename)
+    req(!rv$ui_freeze)
+
+    selected_pathway <- strsplit(rv$visualization_pathway, "\n")[[1]]
+    selected_pathway <- selected_pathway[selected_pathway != ""]
+
+    selected_pathway <- intersect(selected_pathway, rv$gsea_obj$ID)
+    selected_pathway <- selected_pathway[1]
+    draw_pathway_volcano_single(
+      deg = rv$deg_obj,
+      gsea = rv$gsea_obj,
+      selected_pathway = selected_pathway,
+      pathway_rename = rv$pathway_rename,
+      pvalue_limit = input$pathway_volcano_pv_limit,
+      log2FC_limit = input$pathway_volcano_log2fc_limit,
+      top_n_label = input$pathway_volcano_label_n,
+      point_size = input$pathway_volcano_point_size,
+      label_size = input$pathway_volcano_label_size,
+      axis_title_size = input$pathway_volcano_axis_title_size,
+      axis_text_size = input$pathway_volcano_axis_text_size,
+      legend_position = input$pathway_volcano_legend_position,
+      legend_text_size = input$pathway_volcano_legend_text_size
+    )
+  })
+  
+  observeEvent(input$save_pathway_multi_volcano, {
+    
+    req(rv$deg_obj)
+    req(rv$gsea_obj)
+    req(rv$visualization_pathway != "")
+    req(rv$pathway_rename)
+    req(!rv$ui_freeze)
+    
+    showModal(
+      modalDialog(
+        title = "Generating Pathway Volcano Plots",
+        
+        tags$div(
+          id = "pathway_volcano_progress_detail",
+          "Starting..."
+        ),
+        
+        easyClose = FALSE,
+        footer = NULL
+      )
+    )
+    
+    color_total <- c(
+      "#e6194b","#ffe119","#46f0f0","#f58231","#bcf60c", 
+      "#ff00ff","#9a6324","#fffac8","#e6beff","#00bfff", 
+      "#ffd8b1","#00ff7f","#f5a9bc","#1e90ff","#ffa500",
+      "#98fb98","#911eb4","#afeeee","#fa8072","#9acd32",
+      "#3cb44b","#000075","#808000","#cd5c5c","#dda0dd",
+      "#40e0d0","#ff69b4","#8a2be2","#c71585","#5f9ea0",
+      "#dc143c","#87cefa","#ff6347","#9932cc","#00ced1",
+      "#ff4500","#6a5acd","#b0e0e6","#d2691e","#a9a9f5",
+      "#adff2f","#8b0000","#7fffd4","#00fa9a","#ba55d3",
+      "#2e8b57","#ffdab9","#b22222","#ffe4e1","#7b68ee"
+    )
+    
+    selected_pathway <- strsplit(rv$visualization_pathway, "\n")[[1]]
+    selected_pathway <- trimws(selected_pathway)
+    selected_pathway <- selected_pathway[selected_pathway != ""]
+    
+    selected_pathway <- intersect(
+      selected_pathway,
+      rv$gsea_obj$ID
+    )
+    
+    selected_pathway <- strsplit(rv$visualization_pathway, "\n")[[1]]
+    selected_pathway <- trimws(selected_pathway)
+    selected_pathway <- selected_pathway[selected_pathway != ""]
+    
+    selected_pathway <- intersect(
+      selected_pathway,
+      rv$gsea_obj$ID
+    )
+    all_pathway_genes <- rv$gsea_obj %>%
+      dplyr::filter(ID %in% selected_pathway) %>%
+      dplyr::pull(core_enrichment) %>%
+      strsplit("/") %>%
+      unlist() %>%
+      unique()
+    
+    global_deg_df <- rv$deg_obj %>%
+      dplyr::filter(gene %in% all_pathway_genes) %>%
+      dplyr::mutate(
+        neg_log_pval = -log10(
+          pmax(pvalue_1, 1e-300)
+        )
+      )
+    global_xlim <- max(
+      abs(global_deg_df$log2FC),
+      na.rm = TRUE
+    ) + 0.5
+    
+    global_ylim <- max(
+      global_deg_df$neg_log_pval,
+      na.rm = TRUE
+    ) + 1
+    
+    if (length(selected_pathway) == 0) {
+      
+      removeModal()
+      
+      showNotification(
+        "No valid pathways found in GSEA object",
+        type = "error"
+      )
+      
+      return()
+    }
+    
+    total <- length(selected_pathway)
+    
+    out_dir <- input$pathway_volcano_save_path
+    
+    if (!dir.exists(out_dir)) {
+      dir.create(out_dir, recursive = TRUE)
+    }
+    
+    generated_files <- c()
+    
+    for (i in seq_along(selected_pathway)) {
+      
+      pathway <- selected_pathway[i]
+      
+      done <- i - 1
+      remaining <- total - i + 1
+      
+      shinyjs::html(
+        "pathway_volcano_progress_detail",
+        paste0(
+          "<b>Processing pathway:</b> ", pathway, "<br>",
+          "Completed: ", done, "<br>",
+          "Remaining: ", remaining
+        )
+      )
+      
+      Sys.sleep(0.01)
+      
+      color_index <- ((i - 1) %% length(color_total)) + 1
+      pathway_color <- color_total[color_index]
+      
+      pathway_title <- rv$pathway_rename %>%
+        dplyr::filter(original_pathway == pathway) %>%
+        dplyr::pull(renamed_pathway)
+      
+      if (length(pathway_title) == 0) {
+        pathway_title <- pathway
+      }
+      
+      safe_name <- gsub("[^A-Za-z0-9_\\-]", "_", pathway_title)
+      
+      file_path <- file.path(
+        out_dir,
+        paste0(safe_name, ".pdf")
+      )
+
+      p <- draw_pathway_volcano_single(
+        deg = rv$deg_obj,
+        gsea = rv$gsea_obj,
+        selected_pathway = pathway,
+        pathway_rename = rv$pathway_rename,
+        pathway_color = pathway_color,
+        pvalue_limit = input$pathway_volcano_pv_limit,
+        log2FC_limit = input$pathway_volcano_log2fc_limit,
+        top_n_label = input$pathway_volcano_label_n,
+        point_size = input$pathway_volcano_point_size,
+        label_size = input$pathway_volcano_label_size,
+        axis_title_size = input$pathway_volcano_axis_title_size,
+        axis_text_size = input$pathway_volcano_axis_text_size,
+        legend_position = input$pathway_volcano_legend_position,
+        legend_text_size = input$pathway_volcano_legend_text_size,
+        xlim = global_xlim,
+        ylim = global_ylim
+      )
+      pdf(
+        file_path,
+        width = input$pathway_volcano_pdf_width_multi,
+        height = input$pathway_volcano_pdf_height_multi
+      )
+      
+      print(p)
+      
+      dev.off()
+      
+      generated_files <- c(
+        generated_files,
+        file_path
+      )
+    }
+    
+    rv$pathway_multi_volcano_files <- generated_files
+    
+    removeModal()
+    
+    showNotification(
+      "All pathway volcano plots generated!",
+      type = "message"
+    )
+  })
+  
+  output$download_pathway_multi_volcano <- downloadHandler(
+    
+    filename = function() {
+      "pathway_multi_volcano_plots.zip"
+    },
+    
+    content = function(file) {
+      
+      files <- rv$pathway_multi_volcano_files
+      
+      if (is.null(files) || length(files) == 0) {
+        
+        showNotification(
+          "No pathway volcano plots generated yet.",
+          type = "error",
+          duration = 5
+        )
+        
+        return(NULL)
+      }
+      
+      old <- getwd()
+      on.exit(setwd(old), add = TRUE)
+      
+      setwd(dirname(files[1]))
+      
+      zip::zip(
+        zipfile = file,
+        files = basename(files)
+      )
+      
+      showNotification(
+        "Pathway volcano plots downloaded successfully.",
+        type = "message",
+        duration = 3
+      )
+    }
+  )
+  
+  # ----------------- VISUALIZATION FUNCTION NES Bar Plot -----------------
+  
+  nes_barplot_reactive <- reactive({
+
+    req(rv$gsea_obj)
+    req(rv$visualization_pathway != "")
+    req(rv$pathway_rename)
+    req(!rv$ui_freeze)
+    
+    
+    selected_pathway <- strsplit(
+      rv$visualization_pathway,
+      "\n"
+    )[[1]]
+    
+    selected_pathway <- selected_pathway[
+      selected_pathway != ""
+    ]
+    if (length(selected_pathway) > 40) {
+      
+      return(
+        list(
+          type = "message",
+          content = paste0(
+            "Error: Too many pathways selected (>40). ",
+            "Please reduce selection."
+          )
+        )
+      )
+    }
+    
+    if(sum(rv$gsea_obj$ID %in% selected_pathway) == 0){
+      return(
+        list(
+          type = "message",
+          content = paste0(
+            "Error: No matching pathways found in gsea_obj. ",
+            "Please check the pathway name input."
+          )
+        )
+      )
+    }
+    
+    plot_gsea_nes_barplot <- function(gsea_obj,
+                                      pathway_rename,
+                                      wrap_width = 40,
+                                      pathway_size = 12,
+                                      nes_value_size = 12,
+                                      y_title_size = 10,
+                                      x_title_size = 10,
+                                      bar_width = 0.7) {
+      rename_map <- setNames(
+        pathway_rename$renamed_pathway,
+        pathway_rename$original_pathway
+      )
+      valid_ids <- pathway_rename$original_pathway
+      gsea_obj <- gsea_obj[gsea_obj$ID %in% valid_ids, , drop = FALSE]
+      gsea_obj$ID <- ifelse(
+        gsea_obj$ID %in% names(rename_map),
+        rename_map[gsea_obj$ID],
+        gsea_obj$ID
+      )
+      gsea_obj$ID <- stringr::str_wrap(
+        gsea_obj$ID,
+        width = wrap_width
+      )
+      gsea_obj$ID <- reorder(
+        gsea_obj$ID,
+        gsea_obj$NES
+      )
+      p <- ggplot2::ggplot(gsea_obj, ggplot2::aes(x = ID, y = NES, fill = NES > 0)) +
+        ggplot2::geom_bar(stat = "identity", width = bar_width) +
+        ggplot2::coord_flip() +
+        ggplot2::scale_fill_manual(values = c("lightblue", "darkred")) +
+        ggplot2::theme_minimal() +
+        ggplot2::theme(
+          axis.text.x = ggplot2::element_text(size = nes_value_size),
+          axis.text.y = ggplot2::element_text(size = pathway_size, face = "bold"),
+          axis.title.x = ggplot2::element_text(size = x_title_size, face = "bold"),
+          axis.title.y = ggplot2::element_text(size = y_title_size, face = "bold")) +
+        ggplot2::labs(x = "Pathway", y = "NES", fill = "Direction") +
+        ggplot2::guides(fill = "none") +
+        ggplot2::ylim(
+          min(gsea_obj$NES, na.rm = TRUE) - 0.2,
+          max(gsea_obj$NES, na.rm = TRUE) + 0.2
+        )
+      
+      return(p)
+    }
+    plot_gsea_nes_barplot(gsea_obj = rv$gsea_obj, 
+                          pathway_rename = rv$pathway_rename,
+                          wrap_width = input$nes_barplot_pathway_length,
+                          pathway_size = input$nes_barplot_pathway_size,
+                          nes_value_size = input$nes_barplot_nes_value_size,
+                          y_title_size = input$nes_barplot_y_title_size,
+                          x_title_size = input$nes_barplot_x_title_size,
+                          bar_width = input$nes_barplot_bar_width)
+  })
+  
+  output$nes_barplot <- renderPlot({
+    
+    req(nes_barplot_reactive())
+    req(!rv$ui_freeze)
+    res <- nes_barplot_reactive()
+    
+    if (is.list(res) && res$type == "message") {
+      
+      plot.new()
+      text(0.5, 0.5, res$content, cex = 1.2, col = "red")
+      
+      return()
+    }
+    res
+  })
+  
+  observeEvent(input$save_nes_barplot, {
+    
+    req(nes_barplot_reactive())
+    req(input$nes_barplot_save_path)
+    
+    out_dir <- input$nes_barplot_save_path
+    if (!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE)
+    
+    out_file <- file.path(
+      out_dir,
+      paste0("NES_barplot_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".pdf")
+    )
+    
+    pdf(out_file,
+        width = input$nes_barplot_pdf_width,
+        height = input$nes_barplot_pdf_height)
+    
+    print(nes_barplot_reactive())
+    
+    dev.off()
+    
+    showNotification("Saved NES barplot", type = "message")
+  })
+  
+  output$download_nes_barplot <- downloadHandler(
+    
+    filename = function() {
+      paste0("NES_barplot_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".pdf")
+    },
+    
+    content = function(file) {
+      
+      req(nes_barplot_reactive())
+      
+      pdf(file,
+          width = input$nes_barplot_pdf_width,
+          height = input$nes_barplot_pdf_height)
+      
+      print(nes_barplot_reactive())
+      
+      dev.off()
+    }
+  )
+  
+
+  
 }
 
 shinyApp(ui, server)
