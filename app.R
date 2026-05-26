@@ -10,6 +10,7 @@ library(dplyr)
 library(stringr)
 library(tidyr)
 library(ggrepel)
+library(sortable)
 # devtools::install_github("mpyatkov/NotationConverter")
 library(NotationConverter)
 # source(file.path(getwd(), "DE_analysis.R"))
@@ -44,8 +45,18 @@ extract_meta_columns <- function(data) {
 }
 
 extract_unique_values <- function(data, column_name) {
-  if (is.null(data) || is.null(column_name)) return(NULL)
-  unique(as.character(data@meta.data[[column_name]]))
+  
+  if (is.null(data) || is.null(column_name)) {
+    return(NULL)
+  }
+  
+  x <- data@meta.data[[column_name]]
+  
+  if (is.factor(x)) {
+    levels(x)
+  } else {
+    unique(as.character(x))
+  }
 }
 
 generate_combinations <- function(values) {
@@ -763,7 +774,7 @@ step2Server <- function(id, sample_rows, cluster_rows, sample_meta, cluster_meta
 ui <- fluidPage(
   htmltools::findDependencies(selectizeInput("dummy", NULL, choices = NULL)),
   useShinyjs(),
-  titlePanel("DEG/GSEA prealpha"),
+  titlePanel("sc Gene Expression Explorer"),
   
   tabsetPanel(
     id = "main_tabs",
@@ -790,6 +801,7 @@ ui <- fluidPage(
               type = "pills",
               tabPanel("Violin Plot", value = "violin"),
               tabPanel("Dot Plot", value = "dotplot"),
+              tabPanel("Feature Plot", value = "feature"),
               tabPanel("Volcano Plot (Genes)", value = "volcano"),
               tabPanel("Volcano Plot (Genes in Pathways)", value = "pathway_volcano"),
               tabPanel("GSEA NES", value = "gsea_nes")
@@ -846,6 +858,55 @@ ui <- fluidPage(
       text-align: left;
       padding: 10px 12px;
     }
+    
+    .token-pool {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 10px;
+      background: #fafafa;
+      margin-bottom: 15px;
+    }
+    
+    .token {
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: #2c7be5;
+      color: white;
+      font-size: 13px;
+      cursor: grab;
+      user-select: none;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+      white-space: nowrap;
+    }
+    
+    .token:active {
+      cursor: grabbing;
+    }
+    
+    .sheet {
+      height: 150px;
+      border: 1px solid #ddd;
+      border-radius: 10px;
+      background: white;
+      padding: 10px;
+      overflow-y: auto;
+      display: flex;
+      flex-wrap: wrap;
+      align-content: flex-start;
+      gap: 8px;
+    }
+    
+    .sheet-title {
+      font-weight: bold;
+      margin-bottom: 8px;
+    }
+    
+    .sortable-ghost {
+      opacity: 0.4;
+    }
   "))
 )
 
@@ -858,13 +919,13 @@ server <- function(input, output, session) {
   # Reactive value
   rv <- reactiveValues(
     data_obj = NULL,
-    data_path = NULL,
+    data_obj_path = NULL,
     
     deg_obj = NULL,
-    deg_path = NULL,
+    deg_obj_path = NULL,
     
     gsea_obj = NULL,
-    gsea_path = NULL,
+    gsea_obj_path = NULL,
     
     visualization_marker = "",
     visualization_pathway = "",
@@ -874,6 +935,7 @@ server <- function(input, output, session) {
     
     save_path = "",
     ui_freeze = FALSE
+    
   )
   
   # ----------------- Load Data -----------------
@@ -1080,9 +1142,9 @@ server <- function(input, output, session) {
         div(id = "step1_ui",
             fluidRow(
               column(6, selectInput("sample_column", "meta.data sample column", 
-                                    choices = extract_meta_columns(rv$data_obj))),
+                                    choices = extract_meta_columns(rv$data_obj), width = "100%")),
               column(6, selectInput("cluster_column", "meta.data cluster column", 
-                                    choices = extract_meta_columns(rv$data_obj)))
+                                    choices = extract_meta_columns(rv$data_obj), width = "100%"))
             ),
             hr(),
             h3("Sample Analysis"),
@@ -1255,6 +1317,7 @@ server <- function(input, output, session) {
       switch(input$viz_tabs,
              "violin" = uiOutput("violin_ui"),
              "dotplot" = uiOutput("dotplot_ui"),
+             "feature" = uiOutput("feature_ui"),
              "volcano" = uiOutput("volcano_ui"),
              "pathway_volcano" = uiOutput("pathway_volcano_ui"),
              "gsea_nes" = uiOutput("gsea_nes_ui")
@@ -1308,6 +1371,30 @@ server <- function(input, output, session) {
       ),
       br(), 
       uiOutput("dot_plot_ui")
+    )
+  })
+  
+  #feature Plot UI
+  output$feature_ui <- renderUI({
+    tagList(
+      h4("Seurat RDS Obj:"),
+      path_input_ui(
+        id = "data",
+        label = "Seurat File Path",
+        placeholder = "/path/to/seurat_file.rds",
+        value = rv$data_obj_path),
+      h4("DEG result (Optional):"),
+      path_input_ui(
+        id = "deg",
+        label = "DEG File Path (.tsv)",
+        placeholder = "/path/to/deg_result.tsv",
+        value = rv$deg_obj_path),
+      fluidRow(
+        column(6, actionButton("marker_select_btn", "Select Genes", class = "btn-success", width = "100%")),
+        column(6, actionButton("sample_ident_select_btn", "Select meta.data field", class = "btn-primary", width = "100%"))
+      ),
+      br(), 
+      uiOutput("featureplot_ui")
     )
   })
   
@@ -1438,7 +1525,7 @@ server <- function(input, output, session) {
         column(6,
                actionButton(
                  "generate_all_violin",
-                 "Generate All Marker Violin Plots and save",
+                 "Generate all genes' violin plots and save",
                  style = "background-color: #87cefa; color: white;",
                  width = "100%"
                )
@@ -1446,7 +1533,7 @@ server <- function(input, output, session) {
         column(6,
                downloadButton(
                  "download_violin",
-                 "Download Violin Plots",
+                 "Download violin plots",
                  style = "background-color: #4CAF50; color: white; width: 100%;"
                )
         )
@@ -1497,7 +1584,7 @@ server <- function(input, output, session) {
                             style = "background-color: #87cefa; color: white; width: 100%;")
         ),
         column(6,
-               downloadButton("download_stack_plot", "Download Violin Plot",
+               downloadButton("download_stack_plot", "Download violin plot",
                               style = "background-color: #4CAF50; color: white; width: 100%;")
         )
       )
@@ -1511,7 +1598,7 @@ server <- function(input, output, session) {
       tagList(
         div(
           style = "padding: 15px; background-color: #fff3cd; border: 1px solid #ffeeba; border-radius: 5px;",
-          "Dotplot plot requires a loaded Seurat RDS object, gene list (`Select Gene`) and meta.data field (Select meta.data field). Please load data to process."
+          "Dotplot requires a loaded Seurat RDS object, gene list (`Select Gene`) and meta.data field (Select meta.data field). Please load data to process."
         )
       )
     }else{
@@ -1557,14 +1644,76 @@ server <- function(input, output, session) {
                               style = "background-color: #87cefa; color: white; width: 100%;")
           ),
           column(6,
-                 downloadButton("download_dotplot", "Download Dot Plot",
+                 downloadButton("download_dotplot", "Download dot plot",
                                 style = "background-color: #4CAF50; color: white; width: 100%;")
           )
         )
       )
     }
   })
-  
+  # ----------------- FEATURE PLOT UI -----------------
+  output$featureplot_ui <- renderUI({
+    if (is.null(rv$data_obj) | rv$visualization_marker == "" | rv$visualization_sample_column == "") {
+      tagList(
+        div(
+          style = "padding: 15px; background-color: #fff3cd; border: 1px solid #ffeeba; border-radius: 5px;",
+          "Feature plot requires a loaded Seurat RDS object, gene list (`Select Gene`) and meta.data field (Select meta.data field). Please load data to process."
+        )
+      )
+    }else{
+      tagList(
+        div(
+          style = "display: flex; justify-content: center;",
+          plotOutput("feature_plot", height = "360px")),
+        fluidRow(
+          column(3, numericInput("feature_plot_point_size", "Point size", value = 0.5)),
+          column(3, numericInput("feature_plot_title_size", "Title size", value = 11)),
+          column(3, numericInput("feature_plot_legend_text_size", "Legend text size", value = 12)),
+          column(
+            3,
+            selectInput(
+              "feature_plot_legend_position",
+              "Legend position",
+              choices = c("right", "left", "top", "bottom", "none"),
+              selected = "right"
+            )
+          )
+        ),
+        fluidRow(
+          column(3, numericInput("feature_plot_title_size", "Axis title size", value = 12)),
+          column(3, numericInput("feature_plot_text_size", "Axis text size", value = 10)),
+          column(3, numericInput("feature_plot_width", "PDF width (inch)", value = 10)),
+          column(3, numericInput("feature_plot_height", "PDF height (inch)", value = 3))
+        ),
+        hr(),
+        textInput(
+          "feature_plot_save_path",
+          "Feature Plot output directory",
+          value = file.path(rv$save_path, "Feature_Plot"),
+          width ="100%"
+        ),
+        hr(),
+        fluidRow(
+          column(6,
+                 actionButton(
+                   "generate_all_feature_plot",
+                   "Generate all genes' feature plots and save",
+                   style = "background-color: #87cefa; color: white;",
+                   width = "100%"
+                 )
+          ),
+          column(6,
+                 downloadButton(
+                   "download_feature_plot",
+                   "Download feature plots",
+                   style = "background-color: #4CAF50; color: white; width: 100%;"
+                 )
+          )
+        )
+        
+        )
+    }
+  })
   # ----------------- Original Volcano UI -----------------
   output$volcano_plot_ui <- renderUI({
     
@@ -1616,7 +1765,7 @@ server <- function(input, output, session) {
                               style = "background-color: #87cefa; color: white; width: 100%;")
           ),
           column(6,
-                 downloadButton("download_original_volcano_plot", "Download Volcano Plot",
+                 downloadButton("download_original_volcano_plot", "Download volcano plot",
                                 style = "background-color: #4CAF50; color: white; width: 100%;")
           )
         )
@@ -1706,7 +1855,7 @@ server <- function(input, output, session) {
           6,
           downloadButton(
             "download_pathway_multi_volcano",
-            "Download Plot",
+            "Download plot",
             style = "background-color: #4CAF50; color: white; width: 100%;"
           )
         )
@@ -1778,7 +1927,7 @@ server <- function(input, output, session) {
           6,
           downloadButton(
             "download_pathway_volcano",
-            "Download Plot",
+            "Download plot",
             style = "background-color: #4CAF50; color: white; width: 100%;"
           )
         )
@@ -1845,7 +1994,7 @@ server <- function(input, output, session) {
             6,
             downloadButton(
               "download_nes_barplot",
-              "Download Plot",
+              "Download plot",
               style = "background-color: #4CAF50; color: white; width: 100%;"
             )
           )
@@ -1863,7 +2012,7 @@ server <- function(input, output, session) {
       br(),br(),br(),br(),br()
     )
   })
-  
+  # ----------------- Data Output - Gene Expression UI-----------------
   output$gene_expression_ui <- renderUI({
     tagList(
       h4("Seurat RDS Obj:"),
@@ -1871,7 +2020,8 @@ server <- function(input, output, session) {
         id = "data",
         label = "Seurat File Path",
         placeholder = "/path/to/seurat_file.rds",
-        value = rv$data_obj_path)
+        value = rv$data_obj_path),
+      uiOutput("gene_expression_sub_ui")
     )
   })
   
@@ -2008,7 +2158,7 @@ server <- function(input, output, session) {
   
   # DEG analysis execution
   observeEvent(input$start_deg, {
-    source("/projectnb/wax-es/00_shinyapp/DEG/DEG/DE_analysis.R")
+    source("DE_analysis.R")
     save_path <- input$save_path
     if (!dir.exists(save_path)) dir.create(save_path, recursive = TRUE)
     sample_cards_data <- step2_data$sample_cards_data()
@@ -2218,7 +2368,7 @@ server <- function(input, output, session) {
       return()
     }
     
-    source("/projectnb/wax-es/00_shinyapp/DEG/DEG/GSEA_analysis.R")  
+    source("GSEA_analysis.R")  
     
     showModal(modalDialog(
       title = "GSEA Analysis Running",
@@ -3510,7 +3660,7 @@ server <- function(input, output, session) {
     req(rv$data_obj)
     
     showModal(modalDialog(
-      title = "Processing Markers",
+      title = "Processing Genes",
       
       tags$div(
         id = "violin_progress_detail",
@@ -3532,7 +3682,7 @@ server <- function(input, output, session) {
       removeModal()
       
       showNotification(
-        "No valid markers found in Seurat object",
+        "No valid genes found in Seurat object",
         type = "error"
       )
       
@@ -3557,7 +3707,7 @@ server <- function(input, output, session) {
       shinyjs::html(
         "violin_progress_detail",
         paste0(
-          "<b>Processing marker:</b> ", genes, "<br>",
+          "<b>Processing gene:</b> ", genes, "<br>",
           "Completed: ", done, "<br>",
           "Remaining: ", remaining
         )
@@ -4058,6 +4208,227 @@ server <- function(input, output, session) {
       dev.off()
     }
   )
+  # ----------------- VISUALIZATION FUNCTION Feature Plot -----------------
+  create_featureplot <- function(
+    seurat_obj,
+    gene,
+    split.by = NULL,
+    assay = "RNA",
+    reduction = "umap",
+    pt.size = 0.5,
+    alpha = 1,
+    legend.position = "right",
+    title.size = 12,
+    legend.text.size = 10,
+    axis.title.size = 12,
+    axis.text.size = 10
+  ) {
+    library(patchwork)
+    
+    all_genes <- rownames(seurat_obj)
+    
+    if (!gene %in% all_genes) {
+      stop(paste0("Gene '", gene, "' not found in Seurat object."))
+    }
+    
+    if (!is.null(assay)) {
+      DefaultAssay(seurat_obj) <- assay
+    }
+    
+    p <- FeaturePlot(
+      object = seurat_obj,
+      features = gene,
+      split.by = split.by,
+      reduction = reduction,
+      pt.size = pt.size,
+      order = TRUE,
+      combine = TRUE
+    )
+    
+    if (inherits(p, "patchwork")) {
+      for (i in seq_along(p$patches$plots)) {
+        p$patches$plots[[i]]$layers[[1]]$aes_params$alpha <- alpha
+      }
+    } else {
+      p$layers[[1]]$aes_params$alpha <- alpha
+    }
+    
+    if (!is.null(split.by)) {
+      p <- p & theme(
+        axis.title.y.right = element_blank(),
+        axis.text.y.right = element_blank(),
+        axis.ticks.y.right = element_blank(),
+        axis.line.y.right = element_blank()
+      )
+    }
+    
+    p <- p +
+      plot_layout(guides = "collect") +
+      plot_annotation(
+        title = gene,
+        theme = theme(
+          plot.title = element_text(
+            size = title.size, 
+            hjust = 0.5, 
+            face = "bold",
+            margin = margin(b = 10) 
+          )
+        )
+      ) &
+      theme(
+        axis.title = element_text(size = axis.title.size),
+        axis.text = element_text(size = axis.text.size),
+        
+        legend.position = legend.position,
+        legend.title = element_text(size = title.size),
+        legend.text = element_text(size = legend.text.size)
+      )
+    
+    return(p)
+  }
+  
+  output$feature_plot <- renderPlot({
+    req(rv$data_obj)
+    req(rv$visualization_marker)
+    req(rv$visualization_sample_column)
+    req(!rv$ui_freeze)
+    
+    genes <- unique(trimws(unlist(strsplit(rv$visualization_marker, "\n"))))
+    genes <- genes[genes != ""]
+    gene <- genes[genes %in% rownames(rv$data_obj)][1]
+    create_featureplot(seurat_obj = rv$data_obj,
+                       gene = gene,
+                       split.by = rv$visualization_sample_column,
+                       pt.size = input$feature_plot_point_size,
+                       legend.position = input$feature_plot_legend_position,
+                       title.size = input$feature_plot_title_size,
+                       legend.text.size = input$feature_plot_legend_text_size,
+                       axis.title.size = input$feature_plot_axis_title_size,
+                       axis.text.size = input$feature_plot_text_size)
+    })
+  
+  observeEvent(input$generate_all_feature_plot, {
+    
+    req(rv$data_obj)
+    
+    showModal(modalDialog(
+      title = "Processing Genes",
+      
+      tags$div(
+        id = "feature_plot_progress_detail",
+        "Starting..."
+      ),
+      
+      easyClose = FALSE,
+      footer = NULL
+    ))
+    
+    markers <- unlist(strsplit(rv$visualization_marker, "\n"))
+    markers <- trimws(markers)
+    markers <- markers[markers != "" & !is.na(markers)]
+    valid_genes <- rownames(rv$data_obj)
+    
+    markers <- markers[markers %in% valid_genes]
+    if (length(markers) == 0) {
+      
+      removeModal()
+      
+      showNotification(
+        "No valid genes found in Seurat object",
+        type = "error"
+      )
+      
+      return()
+    }
+    
+    total <- length(markers)
+    
+    out_dir <- input$feature_plot_save_path
+    if (!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE)
+    generated_files <- c()
+    for (i in seq_along(markers)) {
+      
+      genes <- markers[i]
+      
+      done <- i - 1
+      remaining <- total - i + 1
+      
+      shinyjs::html(
+        "feature_plot_progress_detail",
+        paste0(
+          "<b>Processing gene:</b> ", genes, "<br>",
+          "Completed: ", done, "<br>",
+          "Remaining: ", remaining
+        )
+      )
+      
+      Sys.sleep(0.01) 
+      file_path <- file.path(out_dir, paste0(genes, ".pdf"))
+      pdf(file_path,
+          width = input$feature_plot_width,
+          height = input$feature_plot_height)
+      
+      print(
+        create_featureplot(seurat_obj = rv$data_obj,
+                           gene = genes,
+                           split.by = rv$visualization_sample_column,
+                           pt.size = input$feature_plot_point_size,
+                           legend.position = input$feature_plot_legend_position,
+                           title.size = input$feature_plot_title_size,
+                           legend.text.size = input$feature_plot_legend_text_size,
+                           axis.title.size = input$feature_plot_axis_title_size,
+                           axis.text.size = input$feature_plot_text_size)
+      )
+      
+      dev.off()
+      generated_files <- c(generated_files, file_path)
+    }
+    
+    rv$featureplot_files <- generated_files
+    removeModal()
+    
+    showNotification("All feature plots generated!", type = "message")
+  })
+  
+  output$download_feature_plot <- downloadHandler(
+    
+    filename = function() {
+      "feature_plots.zip"
+    },
+    
+    content = function(file) {
+      
+      files <- rv$featureplot_files
+      
+      if (is.null(files) || length(files) == 0) {
+        
+        showNotification(
+          "No feature plots generated yet.",
+          type = "error",
+          duration = 5
+        )
+        
+        return(NULL)
+      }
+      
+      old <- getwd()
+      on.exit(setwd(old), add = TRUE)
+      
+      setwd(dirname(files[1]))
+      
+      zip::zip(
+        zipfile = file,
+        files = basename(files)
+      )
+      
+      showNotification(
+        "Feature plots downloaded successfully.",
+        type = "message",
+        duration = 3
+      )
+    }
+  )
+  
   # ----------------- VISUALIZATION FUNCTION Original Volcano Plot -----------------
   
   volcano_plot_reactive <- reactive({
@@ -4990,10 +5361,354 @@ server <- function(input, output, session) {
       print(nes_barplot_reactive())
       
       dev.off()
+      showNotification(
+        "NES barplots downloaded successfully.",
+        type = "message",
+        duration = 3
+      )
     }
   )
   
 
+  # ----------------- Data Output Gene expression -----------------
+  output$gene_expression_sub_ui <- renderUI({
+    
+    if (is.null(rv$data_obj)) {
+      
+      tagList(
+        div(
+          style = "padding: 15px; background-color: #fff3cd; border: 1px solid #ffeeba; border-radius: 5px;",
+          "Gene expression data output requires a loaded Seurat Obj data. Please load the data to proceed."
+        )
+      )
+      
+    } else {
+      meta_cols <- colnames(rv$data_obj@meta.data)
+      
+      valid_cols <- meta_cols[
+        sapply(rv$data_obj@meta.data[, meta_cols, drop = FALSE], function(x) !is.numeric(x))
+      ]
+      valid_cols <- c("", valid_cols)
+      tagList(
+        fluidRow(
+          column(6, selectInput("gene_expression_first_meta", "First layer meta.data field", choices = valid_cols, width = "100%")),
+          column(6, selectInput("gene_expression_second_meta", "Second layer meta.data field", choices = valid_cols, width = "100%"))
+        ),
+        fluidRow(
+          column(6, actionButton("reorder_first_meta", "Reorder First meta.data field", class = "btn-warning", width = "100%")),
+          column(6, actionButton("reorder_second_meta", "Reorder Second meta.data field", class = "btn-warning", width = "100%"))
+        ),
+        br(),
+        radioButtons("gene_expression_data_slot", "Data slot for visualization",
+                     choices = c("Normalized data (Recommended)" = "data",
+                                 "Raw counts (UMI)" = "counts"),
+                     selected = "data", width = "100%", inline = TRUE),
+        actionButton("marker_select_btn", "Select genes to be labeled (All genes will be analyzed by default)", class = "btn-info", width = "100%"),
+        actionButton("generate_gene_expression", "Generate and Preview Data", class = "btn-success", width = "100%"),
+      br(),
+      uiOutput("preview_gene_expression")
+      )
+    }
+  })
+  
+  observeEvent(input$reorder_first_meta, {
+    
+    req(input$gene_expression_first_meta)
+    
+    meta_name <- input$gene_expression_first_meta
+    
+    req(meta_name != "")
+    
+    x <- rv$data_obj@meta.data[[meta_name]]
+    
+    current_levels <- if (is.factor(x)) {
+      levels(x)
+    } else {
+      unique(as.character(x))
+    }
+    
+    showModal(
+      modalDialog(
+        
+        title = paste("Reorder:", meta_name),
+        
+        rank_list(
+          text = "Drag to reorder",
+          labels = current_levels,
+          input_id = "first_meta_order"
+        ),
+        
+        footer = tagList(
+          modalButton("Cancel"),
+          actionButton(
+            "apply_first_meta_order",
+            "Apply",
+            class = "btn-success"
+          )
+        ),
+        
+        easyClose = TRUE,
+        size = "m"
+      )
+    )
+  })
+  
+  observeEvent(input$apply_first_meta_order, {
+    
+    req(input$gene_expression_first_meta)
+    req(input$first_meta_order)
+    
+    meta_name <- input$gene_expression_first_meta
+    
+    new_order <- input$first_meta_order
+    
+    rv$data_obj@meta.data[[meta_name]] <- factor(
+      rv$data_obj@meta.data[[meta_name]],
+      levels = new_order
+    )
+    
+    updateSelectInput(
+      session,
+      "gene_expression_first_meta",
+      selected = meta_name
+    )
+    meta.name2 = input$gene_expression_second_meta
+    updateSelectInput(
+      session,
+      "gene_expression_second_meta",
+      selected = meta.name2
+    )
+    
+    removeModal()
+    
+    showNotification(
+      paste("Updated order for", meta_name),
+      type = "message",
+      duration = 3
+    )
+  })
+  
+  observeEvent(input$reorder_second_meta, {
+    
+    req(input$gene_expression_second_meta)
+    
+    meta_name <- input$gene_expression_second_meta
+    
+    req(meta_name != "")
+    
+    x <- rv$data_obj@meta.data[[meta_name]]
+    
+    current_levels <- if (is.factor(x)) {
+      levels(x)
+    } else {
+      unique(as.character(x))
+    }
+    
+    showModal(
+      modalDialog(
+        
+        title = paste("Reorder:", meta_name),
+        
+        rank_list(
+          text = "Drag to reorder",
+          labels = current_levels,
+          input_id = "second_meta_order"
+        ),
+        
+        footer = tagList(
+          modalButton("Cancel"),
+          actionButton(
+            "apply_second_meta_order",
+            "Apply",
+            class = "btn-success"
+          )
+        ),
+        
+        easyClose = TRUE,
+        size = "m"
+      )
+    )
+  })
+  
+  observeEvent(input$apply_second_meta_order, {
+    
+    req(input$gene_expression_second_meta)
+    req(input$second_meta_order)
+    
+    meta_name <- input$gene_expression_second_meta
+    
+    new_order <- input$second_meta_order
+    
+    rv$data_obj@meta.data[[meta_name]] <- factor(
+      rv$data_obj@meta.data[[meta_name]],
+      levels = new_order
+    )
+    meta_name1 <- input$gene_expression_first_meta
+    updateSelectInput(
+      session,
+      "gene_expression_first_meta",
+      selected = meta_name1
+    )
+    
+    updateSelectInput(
+      session,
+      "gene_expression_second_meta",
+      selected = meta_name
+    )
+    
+    removeModal()
+    
+    showNotification(
+      paste("Updated order for", meta_name),
+      type = "message",
+      duration = 3
+    )
+  })
+  
+  observeEvent(input$generate_gene_expression, {
+    if(input$gene_expression_first_meta == ""){
+      showModal(
+        modalDialog(
+          title = "Error",
+          p("You must select the First layer meta.data field to analysis."),
+          easyClose = TRUE,
+          footer = actionButton("close_modal", "Close")
+        )
+      )
+      return(NULL)
+    }
+    source("gene_expression_output.R")
+    
+    showModal(
+      modalDialog(
+        title = "Generate Data",
+        p("Generate the gene expression result"),
+        easyClose = FALSE,
+        footer = NULL
+      )
+    )
+    
+    ana_genes <- unique(trimws(unlist(strsplit(rv$visualization_marker, "\n"))))
+    ana_genes <- ana_genes[ana_genes != ""]
+    if (is.null(ana_genes) || length(ana_genes) == 0 || all(is.na(ana_genes))) {
+      ana_genes <- rownames(rv$data_obj)
+    }
+    res <- create_expression_summary(
+      seurat_obj = rv$data_obj,
+      genes = ana_genes,
+      first_meta = input$gene_expression_first_meta,
+      second_meta = input$gene_expression_second_meta,
+      layer = input$gene_expression_data_slot
+    )
+    rv$gene_expression_result <- res$export
+    removeModal()
+  })
+  
+  output$preview_gene_expression <- renderUI({
+    req(rv$gene_expression_result)
+    
+    tagList(
+      br(),
+      h4("Preview:"),
+      div(
+        style = "overflow-x: auto; width: 100%;",
+        tableOutput("gene_expression_table")
+      ),
+      br(),
+      downloadButton("download_gene_expression", "Download result", style = "background-color: #4CAF50; color: white; width: 100%;")
+    )
+  })
+  
+  output$gene_expression_table <- renderTable({
+    req(rv$gene_expression_result)
+    head(rv$gene_expression_result, 10)
+  }, rownames = FALSE)
+  
+  output$download_gene_expression <- downloadHandler(
+    
+    filename = function() {
+      paste0(
+        "Gene_expression_",
+        tools::file_path_sans_ext(basename(rv$data_obj_path)),
+        "_",
+        format(Sys.time(), "%Y%m%d_%H%M%S"),
+        ".xlsx"
+      )
+    },
+    
+    content = function(file) {
+      
+      res <- rv$gene_expression_result
+      
+      if (is.null(res) || nrow(res) == 0) {
+        stop("gene_expression_result is empty")
+      }
+      
+      df <- as.data.frame(res, stringsAsFactors = FALSE)
+      
+      x_row <- which(df[[1]] == "value")[1] + 1
+      
+      if (is.na(x_row)) {
+        stop("Cannot find 'value' in first column")
+      }
+      
+      if (x_row < nrow(df)) {
+        rows_to_convert <- (x_row + 1):nrow(df)
+        cols_to_convert <- 2:ncol(df)
+        
+        for (j in cols_to_convert) {
+          df[rows_to_convert, j] <- as.numeric(as.character(df[rows_to_convert, j]))
+        }
+      }
+      
+      wb <- openxlsx::createWorkbook()
+      openxlsx::addWorksheet(wb, "Gene_expression")
+      header_rows <- 1:x_row
+      openxlsx::writeData(wb, "Gene_expression", df[header_rows, , drop = FALSE])
+      
+      if (x_row < nrow(df)) {
+        data_rows <- (x_row + 1):nrow(df)
+        data_df <- df[data_rows, , drop = FALSE]
+        
+        numeric_cols <- 2:ncol(data_df)
+        for (j in numeric_cols) {
+          data_df[[j]] <- as.numeric(as.character(data_df[[j]]))
+        }
+        
+        openxlsx::writeData(
+          wb, 
+          "Gene_expression", 
+          data_df,
+          startRow = x_row + 1,
+          startCol = 1,
+          colNames = FALSE
+        )
+      }
+      
+      num_style <- openxlsx::createStyle(numFmt = "0.000")
+      
+      if (x_row < nrow(df)) {
+        openxlsx::addStyle(
+          wb,
+          sheet = "Gene_expression",
+          style = num_style,
+          rows = (x_row + 1):nrow(df),
+          cols = 2:ncol(df),
+          gridExpand = TRUE,
+          stack = TRUE
+        )
+      }
+      
+      openxlsx::saveWorkbook(wb, file, overwrite = TRUE)
+      
+      showNotification(
+        "Gene expression data downloaded successfully.",
+        type = "message",
+        duration = 3
+      )
+    }
+  )
+  
   
 }
 
