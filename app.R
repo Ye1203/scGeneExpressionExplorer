@@ -1141,9 +1141,9 @@ server <- function(input, output, session) {
         br(),
         div(id = "step1_ui",
             fluidRow(
-              column(6, selectInput("sample_column", "meta.data sample column", 
+              column(6, selectInput("sample_column", "meta.data sample identification", 
                                     choices = extract_meta_columns(rv$data_obj), width = "100%")),
-              column(6, selectInput("cluster_column", "meta.data cluster column", 
+              column(6, selectInput("cluster_column", "meta.data cluster identification", 
                                     choices = extract_meta_columns(rv$data_obj), width = "100%"))
             ),
             hr(),
@@ -1507,8 +1507,8 @@ server <- function(input, output, session) {
       fluidRow(
         column(3, numericInput("v_title_size", "Title size", value = 14)),
         column(3, numericInput("v_angle", "X rotation angle", value = 0)),
-        column(3, numericInput("v_width", "PDF width (inch)", value = 4)),
-        column(3, numericInput("v_height", "PDF height (inch)", value = 3))
+        column(3, numericInput("v_width", "Graph width (inch)", value = 4)),
+        column(3, numericInput("v_height", "Graph height (inch)", value = 3))
       ),
       fluidRow(
         column(4, div(style = "padding-top: 22px;", checkboxInput("v_show_points", "Show points", value = TRUE)))
@@ -1566,8 +1566,8 @@ server <- function(input, output, session) {
         column(3, numericInput("stack_violin_y_right_label_size", "Right Y-axis label size", value = 8)),
         # LAYOUT
         column(6, sliderInput("stack_violin_left_proportion", "Left panel proportion", min = 0.001, max = 0.999, value = 0.3, width = "100%")),
-        column(3, numericInput("stack_width", "PDF width (inch)", value = 9)),
-        column(3, numericInput("stack_height", "PDF height (inch)", value = 8))
+        column(3, numericInput("stack_width", "Graph width (inch)", value = 9)),
+        column(3, numericInput("stack_height", "Graph height (inch)", value = 8))
       ),
       
       fluidRow(
@@ -1580,7 +1580,7 @@ server <- function(input, output, session) {
                ),
         ),
         column(6,
-               actionButton("save_stack_plot", "Save PDF",
+               actionButton("save_stack_plot", "Save Graph",
                             style = "background-color: #87cefa; color: white; width: 100%;")
         ),
         column(6,
@@ -1626,8 +1626,8 @@ server <- function(input, output, session) {
           column(3, numericInput("dotplot_legend_key_size", "Key size", value = 0.5))
         ),
         fluidRow(
-          column(3, numericInput("dotplot_width", "PDF width (inch)", value = 5)),
-          column(3, numericInput("dotplot_height", "PDF height (inch)", value = 3)),
+          column(3, numericInput("dotplot_width", "Graph width (inch)", value = 5)),
+          column(3, numericInput("dotplot_height", "Graph height (inch)", value = 3)),
           column(6, div(style = "padding-top: 22px;", checkboxInput("dotplot_scale", "Scale the color of dotplot (average expression)", value = TRUE, width = "100%")))
         ),
         fluidRow(
@@ -1640,7 +1640,7 @@ server <- function(input, output, session) {
                  ),
           ),
           column(6,
-                 actionButton("save_dotplot", "Save PDF",
+                 actionButton("save_dotplot", "Save Graph",
                               style = "background-color: #87cefa; color: white; width: 100%;")
           ),
           column(6,
@@ -1667,7 +1667,7 @@ server <- function(input, output, session) {
           plotOutput("feature_plot", height = "360px")),
         fluidRow(
           column(3, numericInput("feature_plot_point_size", "Point size", value = 0.5)),
-          column(3, numericInput("feature_plot_title_size", "Title size", value = 11)),
+          column(3, numericInput("feature_plot_title_size", "Title size", value = 15)),
           column(3, numericInput("feature_plot_legend_text_size", "Legend text size", value = 12)),
           column(
             3,
@@ -1682,8 +1682,8 @@ server <- function(input, output, session) {
         fluidRow(
           column(3, numericInput("feature_plot_title_size", "Axis title size", value = 12)),
           column(3, numericInput("feature_plot_text_size", "Axis text size", value = 10)),
-          column(3, numericInput("feature_plot_width", "PDF width (inch)", value = 10)),
-          column(3, numericInput("feature_plot_height", "PDF height (inch)", value = 3))
+          column(3, numericInput("feature_plot_width", "Graph width (inch)", value = 10)),
+          column(3, numericInput("feature_plot_height", "Graph height (inch)", value = 3))
         ),
         hr(),
         textInput(
@@ -1747,8 +1747,8 @@ server <- function(input, output, session) {
           column(3, numericInput("original_volcano_title_size", "Axis title size", value = 10))
         ),
         fluidRow(
-          column(3, numericInput("original_volcano_width", "PDF width (inch)", value = 3.6)),
-          column(3, numericInput("original_volcano_height", "PDF height (inch)", value = 3.2)),
+          column(3, numericInput("original_volcano_width", "Graph width (inch)", value = 3.6)),
+          column(3, numericInput("original_volcano_height", "Graph height (inch)", value = 3.2)),
           column(6, div(style = "padding-top: 22px;", checkboxInput("original_volcano_auto_label", "Automatically label gene based on volcano graph", value = FALSE, width = "100%")))
         ),
         fluidRow(
@@ -1761,7 +1761,7 @@ server <- function(input, output, session) {
                  ),
           ),
           column(6,
-                 actionButton("save_original_volcano_plot", "Save PDF",
+                 actionButton("save_original_volcano_plot", "Save Graph",
                               style = "background-color: #87cefa; color: white; width: 100%;")
           ),
           column(6,
@@ -1826,8 +1826,8 @@ server <- function(input, output, session) {
       
       fluidRow(
         column(3, numericInput("pathway_volcano_label_n", "The number of labels (based on top log2FC)", value = 10)),
-        column(3, numericInput("pathway_volcano_pdf_width", "PDF width (inch)", value = 6)),
-        column(3, numericInput("pathway_volcano_pdf_height", "PDF height (inch)", value = 8))
+        column(3, numericInput("pathway_volcano_pdf_width", "Graph width (inch)", value = 6)),
+        column(3, numericInput("pathway_volcano_pdf_height", "Graph height (inch)", value = 8))
       ),
       
       fluidRow(
@@ -1847,7 +1847,7 @@ server <- function(input, output, session) {
           6,
           actionButton(
             "save_pathway_multi_volcano",
-            "Save PDF",
+            "Save Graph",
             style = "background-color: #87cefa; color: white; width: 100%;"
           )
         ),
@@ -1898,8 +1898,8 @@ server <- function(input, output, session) {
       
       fluidRow(
         column(3, numericInput("pathway_volcano_label_n", "The number of labels (based on top log2FC)", value = 10)),
-        column(3, numericInput("pathway_volcano_pdf_width", "PDF width (inch)", value = 6)),
-        column(3, numericInput("pathway_volcano_pdf_height", "PDF height (inch)", value = 8))
+        column(3, numericInput("pathway_volcano_pdf_width", "Graph width (inch)", value = 6)),
+        column(3, numericInput("pathway_volcano_pdf_height", "Graph height (inch)", value = 8))
       ),
       
       fluidRow(
@@ -1919,7 +1919,7 @@ server <- function(input, output, session) {
           6,
           actionButton(
             "save_pathway_volcano",
-            "Save PDF",
+            "Save Graph",
             style = "background-color: #87cefa; color: white; width: 100%;"
           )
         ),
@@ -1966,8 +1966,8 @@ server <- function(input, output, session) {
         fluidRow(
           column(3, numericInput("nes_barplot_pathway_length", "Pathway line break length", value = 40)),
           column(3, numericInput("nes_barplot_bar_width", "Bar width", value = 0.7)),
-          column(3, numericInput("nes_barplot_pdf_width", "PDF width (inch)", value = 6)),
-          column(3, numericInput("nes_barplot_pdf_height", "PDF height (inch)", value = 6)),
+          column(3, numericInput("nes_barplot_pdf_width", "Graph width (inch)", value = 6)),
+          column(3, numericInput("nes_barplot_pdf_height", "Graph height (inch)", value = 6)),
         ),
         fluidRow(
           column(
@@ -1986,7 +1986,7 @@ server <- function(input, output, session) {
             6,
             actionButton(
               "save_nes_barplot",
-              "Save PDF",
+              "Save Graph",
               style = "background-color: #87cefa; color: white; width: 100%;"
             )
           ),
@@ -3655,6 +3655,200 @@ server <- function(input, output, session) {
       )
   })
   
+  # Helper function to generate violin plots directly as PNG
+  generate_violin_plot_png <- function(seurat_obj, gene, output_file,
+                                       group.by = NULL,
+                                       pt.size = 0.5,
+                                       show_points = TRUE,
+                                       x_lab_size = 12,
+                                       y_lab_size = 12,
+                                       x_text_size = 10,
+                                       y_text_size = 10,
+                                       title_size = 14,
+                                       angle = 0,
+                                       dpi = 300,
+                                       width = 7,
+                                       height = 7) {
+    
+    library(Seurat)
+    library(ggplot2)
+    
+    # Adjust pt.size based on show_points
+    pt.size_val <- if (show_points) pt.size else 0
+    
+    # Create PNG directly (much smaller than PDF)
+    png(output_file, width = width * dpi, height = height * dpi, res = dpi)
+    
+    print(
+      VlnPlot(
+        seurat_obj,
+        features = gene,
+        group.by = group.by,
+        pt.size = pt.size_val
+      ) +
+        ggplot2::labs(
+          title = gene,
+          x = group.by,
+          y = "Expression"
+        ) +
+        ggplot2::theme(
+          axis.title.x = ggplot2::element_text(size = x_lab_size),
+          axis.title.y = ggplot2::element_text(size = y_lab_size),
+          axis.text.x = ggplot2::element_text(
+            size = x_text_size,
+            angle = angle,
+            hjust = 0.5, vjust = 0.5
+          ),
+          axis.text.y = ggplot2::element_text(
+            size = y_text_size
+          ),
+          plot.title = ggplot2::element_text(
+            size = title_size,
+            hjust = 0.5
+          ),
+          legend.position = "none"
+        )
+    )
+    
+    dev.off()
+  }
+  
+  # Helper function to combine PNGs into multi-page PDF
+  # Helper function to combine PNGs into multi-page PDF (8 per page, 2 per row)
+  combine_pngs_to_pdf_violin <- function(png_files, output_path, 
+                                  genes_per_page = 8,
+                                  genes_per_row = 2,
+                                  final_width = 8.5,
+                                  final_height = 11,
+                                  update_progress_fn = NULL) {
+    
+    library(magick)
+    
+    if (length(png_files) == 0) {
+      stop("No PNG files to combine")
+    }
+    
+    if (!is.null(update_progress_fn)) {
+      update_progress_fn("<b>Combining images into PDF...</b><br>Reading PNG files...")
+    }
+    
+    num_pages <- ceiling(length(png_files) / genes_per_page)
+    
+    tryCatch({
+      # Read all PNG files
+      all_images <- list()
+      for (i in seq_along(png_files)) {
+        if (!is.null(update_progress_fn) && i %% 5 == 0) {
+          update_progress_fn(paste0(
+            "<b>Combining images into PDF...</b><br>",
+            "Loading images: ", i, " / ", length(png_files)
+          ))
+        }
+        
+        tryCatch({
+          img <- magick::image_read(png_files[i])
+          all_images[[i]] <- img
+        }, error = function(e) {
+          warning(paste("Failed to read", png_files[i]))
+        })
+      }
+      
+      # Create multi-page PDF
+      if (!is.null(update_progress_fn)) {
+        update_progress_fn("<b>Combining images into PDF...</b><br>Creating pages...")
+      }
+      
+      page_images <- list()
+      
+      for (page in 1:num_pages) {
+        start_idx <- (page - 1) * genes_per_page + 1
+        end_idx <- min(page * genes_per_page, length(all_images))
+        
+        # Get images for this page
+        page_imgs <- all_images[start_idx:end_idx]
+        page_imgs <- page_imgs[!sapply(page_imgs, is.null)]
+        
+        if (length(page_imgs) > 0) {
+          # Arrange images in rows (2 per row)
+          rows <- list()
+          num_rows <- ceiling(length(page_imgs) / genes_per_row)
+          
+          for (row in 1:num_rows) {
+            row_start <- (row - 1) * genes_per_row + 1
+            row_end <- min(row * genes_per_row, length(page_imgs))
+            row_imgs <- page_imgs[row_start:row_end]
+            
+            # Stack images horizontally for this row
+            row_combined <- row_imgs[[1]]
+            if (length(row_imgs) > 1) {
+              for (k in 2:length(row_imgs)) {
+                row_combined <- magick::image_append(c(row_combined, row_imgs[[k]]), 
+                                                     stack = FALSE)  # FALSE = horizontal
+              }
+            }
+            
+            # If only 1 image in row, pad with white space to maintain alignment
+            if (length(row_imgs) < genes_per_row) {
+              img_width <- magick::image_info(row_combined)$width
+              img_height <- magick::image_info(row_combined)$height
+              
+              white_space <- magick::image_blank(width = img_width,
+                                                 height = img_height, 
+                                                 color = "white")
+              row_combined <- magick::image_append(c(row_combined, white_space), 
+                                                   stack = FALSE)
+            }
+            
+            rows[[row]] <- row_combined
+          }
+          
+          # Stack all rows vertically
+          combined <- rows[[1]]
+          if (length(rows) > 1) {
+            for (r in 2:length(rows)) {
+              combined <- magick::image_append(c(combined, rows[[r]]), 
+                                               stack = TRUE)  # TRUE = vertical
+            }
+          }
+          
+          # Resize to fit page
+          info <- magick::image_info(combined)
+          combined <- magick::image_scale(combined, 
+                                          geometry = paste0(
+                                            as.integer(final_width * 300), "x",
+                                            as.integer(final_height * 300)
+                                          ))
+          
+          page_images[[page]] <- combined
+        }
+      }
+      
+      # Combine all pages into single PDF
+      if (!is.null(update_progress_fn)) {
+        update_progress_fn("<b>Combining images into PDF...</b><br>Writing PDF...")
+      }
+      
+      final_images <- page_images[[1]]
+      if (length(page_images) > 1) {
+        for (p in 2:length(page_images)) {
+          final_images <- c(final_images, page_images[[p]])
+        }
+      }
+      
+      magick::image_write(final_images, output_path, format = "pdf")
+      
+      if (!is.null(update_progress_fn)) {
+        update_progress_fn("<b>PDF created successfully!</b>")
+      }
+      
+      return(output_path)
+      
+    }, error = function(e) {
+      stop(paste("Error combining PNGs:", e$message))
+    })
+  }
+  
+  # Modified observeEvent for violin plots
   observeEvent(input$generate_all_violin, {
     
     req(rv$data_obj)
@@ -3678,14 +3872,8 @@ server <- function(input, output, session) {
     
     markers <- markers[markers %in% valid_genes]
     if (length(markers) == 0) {
-      
       removeModal()
-      
-      showNotification(
-        "No valid genes found in Seurat object",
-        type = "error"
-      )
-      
+      showNotification("No valid genes found in Seurat object", type = "error")
       return()
     }
     
@@ -3694,71 +3882,147 @@ server <- function(input, output, session) {
     out_dir <- input$violin_save_path
     if (!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE)
     generated_files <- c()
+    png_dir <- file.path(out_dir, ".temp_png")
+    if (!dir.exists(png_dir)) dir.create(png_dir, recursive = TRUE)
+    png_files <- c()
+    
+    # Step 1: Generate violin plots as PNG files
     for (i in seq_along(markers)) {
-      
       genes <- markers[i]
-      
       done <- i - 1
       remaining <- total - i + 1
       
-      # =========================
-      #  REAL-TIME MODAL UPDATE
-      # =========================
       shinyjs::html(
         "violin_progress_detail",
         paste0(
-          "<b>Processing gene:</b> ", genes, "<br>",
+          "<b>Generating violin plots:</b> ", genes, "<br>",
           "Completed: ", done, "<br>",
           "Remaining: ", remaining
         )
       )
       
-      Sys.sleep(0.01) 
-      file_path <- file.path(out_dir, paste0(genes, ".pdf"))
-      pdf(file_path,
-          width = input$v_width,
-          height = input$v_height)
+      Sys.sleep(0.01)
       
-      print(
-        VlnPlot(
-          rv$data_obj,
-          features = genes,
+      # Save as PNG directly (much smaller than PDF)
+      png_file <- file.path(png_dir, paste0(genes, ".png"))
+      pdf_file <- file.path(out_dir, paste0(genes, ".pdf"))
+      
+      tryCatch({
+        # Generate PNG
+        generate_violin_plot_png(
+          seurat_obj = rv$data_obj,
+          gene = genes,
+          output_file = png_file,
           group.by = rv$visualization_sample_column,
-          pt.size = if (input$v_show_points) 0.5 else 0
-        ) +
-          ggplot2::labs(
-            title = genes,
-            x = rv$visualization_sample_column,
-            y = "Expression"
+          pt.size = if (input$v_show_points) 0.5 else 0,
+          show_points = input$v_show_points,
+          x_lab_size = input$v_x_lab_size,
+          y_lab_size = input$v_y_lab_size,
+          x_text_size = input$v_x_text_size,
+          y_text_size = input$v_y_text_size,
+          title_size = input$v_title_size,
+          angle = input$v_angle,
+          dpi = 300,  # Adjust DPI for quality/size tradeoff
+          width = input$v_width,
+          height = input$v_height
+        )
+        
+        # Also create PDF for individual access
+        pdf(pdf_file,
+            width = input$v_width,
+            height = input$v_height)
+        
+        print(
+          VlnPlot(
+            rv$data_obj,
+            features = genes,
+            group.by = rv$visualization_sample_column,
+            pt.size = if (input$v_show_points) 0.5 else 0
           ) +
-          ggplot2::theme(
-            axis.title.x = ggplot2::element_text(size = input$v_x_lab_size),
-            axis.title.y = ggplot2::element_text(size = input$v_y_lab_size),
-            axis.text.x = ggplot2::element_text(
-              size = input$v_x_text_size,
-              angle = input$v_angle, 
-              hjust = 0.5, vjust = 0.5
-            ),
-            axis.text.y = ggplot2::element_text(
-              size = input$v_y_text_size
-            ),
-            plot.title = ggplot2::element_text(
-              size = input$v_title_size,
-              hjust = 0.5
-            ),
-            
-            legend.position = "none"
-          )
-      )
-      
-      dev.off()
-      generated_files <- c(generated_files, file_path)
+            ggplot2::labs(
+              title = genes,
+              x = rv$visualization_sample_column,
+              y = "Expression"
+            ) +
+            ggplot2::theme(
+              axis.title.x = ggplot2::element_text(size = input$v_x_lab_size),
+              axis.title.y = ggplot2::element_text(size = input$v_y_lab_size),
+              axis.text.x = ggplot2::element_text(
+                size = input$v_x_text_size,
+                angle = input$v_angle, 
+                hjust = 0.5, vjust = 0.5
+              ),
+              axis.text.y = ggplot2::element_text(
+                size = input$v_y_text_size
+              ),
+              plot.title = ggplot2::element_text(
+                size = input$v_title_size,
+                hjust = 0.5
+              ),
+              legend.position = "none"
+            )
+        )
+        
+        dev.off()
+        
+        png_files <- c(png_files, png_file)
+        generated_files <- c(generated_files, pdf_file)
+        
+      }, error = function(e) {
+        warning(paste("Failed to generate plot for", genes, ":", e$message))
+      })
     }
     
     rv$violin_files <- generated_files
-    removeModal()
     
-    showNotification("All violin plots generated!", type = "message")
+    # Step 2: Combine PNG files into single multi-page PDF
+    tryCatch({
+      shinyjs::html(
+        "violin_progress_detail",
+        "<b>Combined file</b><br>Creating multi-page PDF..."
+      )
+      
+      combined_output <- file.path(out_dir, "combined_violin_plots.pdf")
+      
+      combine_pngs_to_pdf_violin(
+        png_files = png_files,
+        output_path = combined_output,
+        genes_per_page = 8,
+        genes_per_row = 2,
+        final_width = input$v_width * 2 + 0.5,  # Wider page for 2 columns
+        final_height = input$v_height * 4 + 1,   # Taller page for 4 rows
+        update_progress_fn = function(msg) {
+          shinyjs::html("violin_progress_detail", paste0("<b>Combined file</b><br>", msg))
+        }
+      )
+      
+      rv$violin_files <- c(rv$violin_files, combined_output)
+      
+      # Step 3: Clean up temporary PNG files
+      shinyjs::html(
+        "violin_progress_detail",
+        "<b>Combined file</b><br>Cleaning up temporary files..."
+      )
+      
+      unlink(png_dir, recursive = TRUE)
+      
+      removeModal()
+      
+      showNotification(
+        paste("All violin plots generated and combined!",
+              "\nIndividual PDFs: ", out_dir,
+              "\nCombined PDF: combined_violin_plots.pdf"),
+        type = "message",
+        duration = 10
+      )
+      
+    }, error = function(e) {
+      removeModal()
+      showNotification(
+        paste("Error combining PDFs:", e$message),
+        type = "error"
+      )
+    })
   })
   
   output$download_violin <- downloadHandler(
@@ -4307,6 +4571,154 @@ server <- function(input, output, session) {
                        axis.text.size = input$feature_plot_text_size)
     })
   
+  # Helper function to generate feature plots directly as PNG
+  generate_feature_plot_png <- function(seurat_obj, gene, output_file,
+                                        split.by = NULL,
+                                        pt.size = 1,
+                                        legend.position = "right",
+                                        title.size = 12,
+                                        legend.text.size = 10,
+                                        axis.title.size = 10,
+                                        axis.text.size = 8,
+                                        dpi = 300,
+                                        width = 7,
+                                        height = 7) {
+    
+    library(png)
+    
+    # Create PNG directly (much smaller than PDF)
+    png(output_file, width = width * dpi, height = height * dpi, res = dpi)
+    
+    print(
+      create_featureplot(seurat_obj = seurat_obj,
+                         gene = gene,
+                         split.by = split.by,
+                         pt.size = pt.size,
+                         legend.position = legend.position,
+                         title.size = title.size,
+                         legend.text.size = legend.text.size,
+                         axis.title.size = axis.title.size,
+                         axis.text.size = axis.text.size)
+    )
+    
+    dev.off()
+  }
+  
+  # Helper function to combine PNGs into multi-page PDF
+  combine_pngs_to_pdf_feature <- function(png_files, output_path, 
+                                  genes_per_page = 4,
+                                  final_width = 8.5,
+                                  final_height = 11,
+                                  update_progress_fn = NULL) {
+    
+    library(magick)
+    
+    if (length(png_files) == 0) {
+      stop("No PNG files to combine")
+    }
+    
+    if (!is.null(update_progress_fn)) {
+      update_progress_fn("<b>Combining images into PDF...</b><br>Reading PNG files...")
+    }
+    
+    num_pages <- ceiling(length(png_files) / genes_per_page)
+    
+    tryCatch({
+      # Read all PNG files
+      all_images <- list()
+      for (i in seq_along(png_files)) {
+        if (!is.null(update_progress_fn) && i %% 5 == 0) {
+          update_progress_fn(paste0(
+            "<b>Combining images into PDF...</b><br>",
+            "Loading images: ", i, " / ", length(png_files)
+          ))
+        }
+        
+        tryCatch({
+          img <- magick::image_read(png_files[i])
+          all_images[[i]] <- img
+        }, error = function(e) {
+          warning(paste("Failed to read", png_files[i]))
+        })
+      }
+      
+      # Create multi-page PDF
+      if (!is.null(update_progress_fn)) {
+        update_progress_fn("<b>Combining images into PDF...</b><br>Creating pages...")
+      }
+      
+      page_images <- list()
+      
+      for (page in 1:num_pages) {
+        start_idx <- (page - 1) * genes_per_page + 1
+        end_idx <- min(page * genes_per_page, length(all_images))
+        
+        # Get images for this page
+        page_imgs <- all_images[start_idx:end_idx]
+        page_imgs <- page_imgs[!sapply(page_imgs, is.null)]
+        
+        if (length(page_imgs) > 0) {
+          # Stack images vertically
+          combined <- page_imgs[[1]]
+          
+          if (length(page_imgs) > 1) {
+            for (j in 2:length(page_imgs)) {
+              combined <- magick::image_append(c(combined, page_imgs[[j]]), 
+                                               stack = TRUE)
+            }
+          }
+          
+          # Add white space at bottom if less than 4 images
+          if (length(page_imgs) < genes_per_page) {
+            img_height <- magick::image_info(combined)$height
+            padding_height <- (genes_per_page - length(page_imgs)) * 
+              (img_height / length(page_imgs))
+            
+            white_space <- magick::image_blank(width = magick::image_info(combined)$width,
+                                               height = padding_height, 
+                                               color = "white")
+            combined <- magick::image_append(c(combined, white_space), 
+                                             stack = TRUE)
+          }
+          
+          # Resize to fit page
+          info <- magick::image_info(combined)
+          combined <- magick::image_scale(combined, 
+                                          geometry = paste0(
+                                            as.integer(final_width * 300), "x",
+                                            as.integer(final_height * 300)
+                                          ))
+          
+          page_images[[page]] <- combined
+        }
+      }
+      
+      # Combine all pages into single PDF
+      if (!is.null(update_progress_fn)) {
+        update_progress_fn("<b>Combining images into PDF...</b><br>Writing PDF...")
+      }
+      
+      final_images <- page_images[[1]]
+      if (length(page_images) > 1) {
+        for (p in 2:length(page_images)) {
+          final_images <- c(final_images, page_images[[p]])
+        }
+      }
+      
+      magick::image_write(final_images, output_path, format = "pdf")
+      
+      if (!is.null(update_progress_fn)) {
+        update_progress_fn("<b>PDF created successfully!</b>")
+      }
+      
+      return(output_path)
+      
+    }, error = function(e) {
+      stop(paste("Error combining PNGs:", e$message))
+    })
+  }
+  
+  # Modified observeEvent
   observeEvent(input$generate_all_feature_plot, {
     
     req(rv$data_obj)
@@ -4330,14 +4742,8 @@ server <- function(input, output, session) {
     
     markers <- markers[markers %in% valid_genes]
     if (length(markers) == 0) {
-      
       removeModal()
-      
-      showNotification(
-        "No valid genes found in Seurat object",
-        type = "error"
-      )
-      
+      showNotification("No valid genes found in Seurat object", type = "error")
       return()
     }
     
@@ -4346,48 +4752,125 @@ server <- function(input, output, session) {
     out_dir <- input$feature_plot_save_path
     if (!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE)
     generated_files <- c()
+    png_dir <- file.path(out_dir, ".temp_png")
+    if (!dir.exists(png_dir)) dir.create(png_dir, recursive = TRUE)
+    png_files <- c()
+    
+    # Step 1: Generate feature plots as PNG files
     for (i in seq_along(markers)) {
-      
       genes <- markers[i]
-      
       done <- i - 1
       remaining <- total - i + 1
       
       shinyjs::html(
         "feature_plot_progress_detail",
         paste0(
-          "<b>Processing gene:</b> ", genes, "<br>",
+          "<b>Generating feature plots:</b> ", genes, "<br>",
           "Completed: ", done, "<br>",
           "Remaining: ", remaining
         )
       )
       
-      Sys.sleep(0.01) 
-      file_path <- file.path(out_dir, paste0(genes, ".pdf"))
-      pdf(file_path,
+      Sys.sleep(0.01)
+      
+      # Save as PNG directly (much smaller than PDF)
+      png_file <- file.path(png_dir, paste0(genes, ".png"))
+      pdf_file <- file.path(out_dir, paste0(genes, ".pdf"))
+      
+      tryCatch({
+        # Generate PNG
+        generate_feature_plot_png(
+          seurat_obj = rv$data_obj,
+          gene = genes,
+          output_file = png_file,
+          split.by = rv$visualization_sample_column,
+          pt.size = input$feature_plot_point_size,
+          legend.position = input$feature_plot_legend_position,
+          title.size = input$feature_plot_title_size,
+          legend.text.size = input$feature_plot_legend_text_size,
+          axis.title.size = input$feature_plot_axis_title_size,
+          axis.text.size = input$feature_plot_text_size,
+          dpi = 100,  # Adjust DPI for quality/size tradeoff
           width = input$feature_plot_width,
-          height = input$feature_plot_height)
-      
-      print(
-        create_featureplot(seurat_obj = rv$data_obj,
-                           gene = genes,
-                           split.by = rv$visualization_sample_column,
-                           pt.size = input$feature_plot_point_size,
-                           legend.position = input$feature_plot_legend_position,
-                           title.size = input$feature_plot_title_size,
-                           legend.text.size = input$feature_plot_legend_text_size,
-                           axis.title.size = input$feature_plot_axis_title_size,
-                           axis.text.size = input$feature_plot_text_size)
-      )
-      
-      dev.off()
-      generated_files <- c(generated_files, file_path)
+          height = input$feature_plot_height
+        )
+        
+        # Also create PDF for individual access
+        pdf(pdf_file,
+            width = input$feature_plot_width,
+            height = input$feature_plot_height)
+        
+        print(
+          create_featureplot(seurat_obj = rv$data_obj,
+                             gene = genes,
+                             split.by = rv$visualization_sample_column,
+                             pt.size = input$feature_plot_point_size,
+                             legend.position = input$feature_plot_legend_position,
+                             title.size = input$feature_plot_title_size,
+                             legend.text.size = input$feature_plot_legend_text_size,
+                             axis.title.size = input$feature_plot_axis_title_size,
+                             axis.text.size = input$feature_plot_text_size)
+        )
+        
+        dev.off()
+        
+        png_files <- c(png_files, png_file)
+        generated_files <- c(generated_files, pdf_file)
+        
+      }, error = function(e) {
+        warning(paste("Failed to generate plot for", genes, ":", e$message))
+      })
     }
     
     rv$featureplot_files <- generated_files
-    removeModal()
     
-    showNotification("All feature plots generated!", type = "message")
+    # Step 2: Combine PNG files into single multi-page PDF
+    tryCatch({
+      shinyjs::html(
+        "feature_plot_progress_detail",
+        "<b>Combined file</b><br>Creating multi-page PDF..."
+      )
+      
+      combined_output <- file.path(out_dir, "combined_feature_plots.pdf")
+      
+      combine_pngs_to_pdf_feature(
+        png_files = png_files,
+        output_path = combined_output,
+        genes_per_page = 4,
+        final_width = input$feature_plot_width,
+        final_height = input$feature_plot_height * 4 + 1,  # 4 plots per page
+        update_progress_fn = function(msg) {
+          shinyjs::html("feature_plot_progress_detail", paste0("<b>Combined file</b><br>", msg))
+        }
+      )
+      
+      rv$featureplot_files <- c(rv$featureplot_files, combined_output)
+      
+      # Step 3: Clean up temporary PNG files
+      shinyjs::html(
+        "feature_plot_progress_detail",
+        "<b>Combined file</b><br>Cleaning up temporary files..."
+      )
+      
+      unlink(png_dir, recursive = TRUE)
+      
+      removeModal()
+      
+      showNotification(
+        paste("All feature plots generated and combined!",
+              "\nIndividual PDFs: ", out_dir,
+              "\nCombined PDF: combined_feature_plots.pdf"),
+        type = "message",
+        duration = 10
+      )
+      
+    }, error = function(e) {
+      removeModal()
+      showNotification(
+        paste("Error combining PDFs:", e$message),
+        type = "error"
+      )
+    })
   })
   
   output$download_feature_plot <- downloadHandler(
@@ -5400,8 +5883,8 @@ server <- function(input, output, session) {
         ),
         br(),
         radioButtons("gene_expression_data_slot", "Data slot for visualization",
-                     choices = c("Normalized data (Recommended)" = "data",
-                                 "Raw counts (UMI)" = "counts"),
+                     choices = c("Normalized UMI (Recommended)" = "data",
+                                 "Raw UMI per cell (counts)" = "counts"),
                      selected = "data", width = "100%", inline = TRUE),
         actionButton("marker_select_btn", "Select genes to be labeled (All genes will be analyzed by default)", class = "btn-info", width = "100%"),
         actionButton("generate_gene_expression", "Generate and Preview Data", class = "btn-success", width = "100%"),
