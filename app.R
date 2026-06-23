@@ -11,6 +11,7 @@ library(stringr)
 library(tidyr)
 library(ggrepel)
 library(sortable)
+library(CellChat)
 # devtools::install_github("mpyatkov/NotationConverter")
 library(NotationConverter)
 # source(file.path(getwd(), "DE_analysis.R"))
@@ -19,7 +20,7 @@ library(NotationConverter)
 # ============================================================
 
 # Load differnt type of data (.rds, .tsv, .xlsx)
-load_data_object <- function(path, type = c("seurat", "deg", "gsea")) {
+load_data_object <- function(path, type = c("seurat", "deg", "gsea", "cccd")) {
   type <- match.arg(type)
   validate(need(file.exists(path), paste(type, "file does not exist")))
   
@@ -36,12 +37,30 @@ load_data_object <- function(path, type = c("seurat", "deg", "gsea")) {
   } else if (type == "gsea") {
     data <- openxlsx::read.xlsx(path, sheet = 1)
     return(data)
-  }
-}
+  } else if (type == "cccd"){
+    data <- readRDS(path)
+    if(is.list(data)){
+      data_merge <- mergeCellChat(data, add.names = names(data))
+    return(list(data = data,
+                data_merge = data_merge
+    ))}else{
+             return(list(data = data,
+                        data_merge = NULL))
+           }
+}}
 
 extract_meta_columns <- function(data) {
   if (!"meta.data" %in% slotNames(data)) return(NULL)
-  c("",colnames(data@meta.data))
+  meta_cols <- colnames(data@meta.data)
+  
+  meta_df <- data@meta.data
+  valid_cols <- meta_cols[
+    sapply(meta_df[, meta_cols, drop = FALSE], function(x) {
+      !is.numeric(x)
+    })
+  ]
+  
+  c("", setdiff(valid_cols, c("CB", "CB_original")))
 }
 
 extract_unique_values <- function(data, column_name) {
@@ -774,14 +793,14 @@ step2Server <- function(id, sample_rows, cluster_rows, sample_meta, cluster_meta
 ui <- fluidPage(
   htmltools::findDependencies(selectizeInput("dummy", NULL, choices = NULL)),
   useShinyjs(),
-  titlePanel("sc Gene Expression Explorer"),
+  titlePanel("scGene Expression Explorer"),
   
   tabsetPanel(
     id = "main_tabs",
     
     tabPanel("DEG", uiOutput("deg_ui")),
     tabPanel("GSEA", uiOutput("gsea_ui")),
-    
+    tabPanel("Cell-Cell Communication Analysis", uiOutput("cellchat_ui")),
     tabPanel(
       "Visualization",
       fluidRow(
@@ -804,7 +823,9 @@ ui <- fluidPage(
               tabPanel("Feature Plot", value = "feature"),
               tabPanel("Volcano Plot (Genes)", value = "volcano"),
               tabPanel("Volcano Plot (Genes in Pathways)", value = "pathway_volcano"),
-              tabPanel("GSEA NES", value = "gsea_nes")
+              tabPanel("GSEA NES", value = "gsea_nes"),
+              tabPanel("Cell-Cell-Communication", value = "cccv"),
+              tabPanel("Cell-Cell-Communication (condition comparison)", value = "cccv_condition")
             )
           )
         ),
@@ -926,6 +947,9 @@ server <- function(input, output, session) {
     
     gsea_obj = NULL,
     gsea_obj_path = NULL,
+    
+    cccd_obj = NULL,
+    cccd_obj_path = NULL,
     
     visualization_marker = "",
     visualization_pathway = "",
@@ -1059,6 +1083,22 @@ server <- function(input, output, session) {
     })
   })
   
+  # GSEA data loading
+  observeEvent(input$load_cccd, {
+    showModal(modalDialog(title = "Loading cell cell communication data.", "Please wait...", footer = NULL, easyClose = FALSE))
+    tryCatch({
+      obj <- load_data_object(input$cccd_path, type = "cccd")
+      rv$cccd_obj <- obj
+      rv$cccd_obj_path <- input$cccd_path
+      if(is.null(rv$data_obj)){rv$save_path <- paste0(gsub("\\.rds$", "", rv$cccd_obj_path), "_visualization")}
+      removeModal()
+      showNotification("Cell cell communication data loaded successfully!", type = "message")
+    }, error = function(e) {
+      removeModal()
+      showNotification(paste("Error:", e$message), type = "error")
+    })
+  })
+  
   # ----------------- Reactive unique values sample value, cluster value -----------------
   sample_values <- reactive({
     req(rv$data_obj, input$sample_column)
@@ -1143,7 +1183,7 @@ server <- function(input, output, session) {
             fluidRow(
               column(6, selectInput("sample_column", "meta.data sample identification", 
                                     choices = extract_meta_columns(rv$data_obj), width = "100%")),
-              column(6, selectInput("cluster_column", "meta.data cluster identification", 
+              column(6, selectInput("cluster_column", "meta.data celltype cluster identification", 
                                     choices = extract_meta_columns(rv$data_obj), width = "100%"))
             ),
             hr(),
@@ -1310,7 +1350,110 @@ server <- function(input, output, session) {
     
   })
   
-  # ----------------- Visualization UI (VIOLIN, DOTPLOT, VOLCANO, NES) -----------------
+  # ----------------- Cell Cell Communication UI -----------------
+  output$cellchat_ui <- renderUI({
+    
+    if (is.null(rv$data_obj)) {
+      tagList(
+        h4("Input Data Path"),
+        path_input_ui(id = "data", label = "Seurat File Path", 
+                      placeholder = "/path/to/seurat_file.rds", 
+                      value = rv$data_obj_path),
+        h4("Please load data first.")
+      )
+    } else {
+      tagList(
+        br(),
+        tags$div(
+          style = "padding: 8px; background-color: #e8f5e8; border-radius: 4px; border: 1px solid #c8e6c9; display: flex; align-items: center; justify-content: space-between;",
+          tags$p(
+            style = "margin: 0;",
+            "📁 ",
+            tags$strong("Loaded: "),
+            tags$code(input$data_path)
+          ),
+          actionButton(
+            "reset_data_obj_btn", 
+            "Reset (change RDS file)", 
+            class = "btn-warning", 
+            style = "min-width: 180px; height: 35px; padding: 5px 10px;"
+          )
+        ),
+        br(),
+        fluidRow(
+          column(
+            6,
+            actionButton(
+              "open_sample_group_modal",
+              HTML("Set <b style='color: red;'>sample</b> groups"),
+              class = "btn-primary",
+              width = "100%",
+              style = "margin-top:20px;"
+            )
+          ),
+          column(
+            6,
+            selectInput(
+              "cluster_column",
+              HTML("meta.data <b style='color: red;'>celltype</b> cluster identification"),
+              choices = extract_meta_columns(rv$data_obj),
+              width = "100%"
+            )
+          )
+        ),
+        hr(),
+        radioButtons(
+          "cc_species",
+          "Species",
+          choices = c("Human" = "human", "Mouse" = "mouse"),
+          selected = "mouse",
+          inline = TRUE
+        ),
+        
+        checkboxGroupInput(
+          "cc_pathway_type",
+          "Pathway Type",
+          choices = c(
+            "Secreted Signaling" = "Secreted Signaling",
+            "Cell-Cell Contact" = "Cell-Cell Contact",
+            "ECM-Receptor" = "ECM-Receptor",
+            "Non-protein Signaling" = "Non-protein Signaling"
+          ),
+          selected = c("Secreted Signaling", "Cell-Cell Contact", "ECM-Receptor", "Non-protein Signaling"),
+          inline = TRUE
+        ),
+        div(
+          style = "display:flex; align-items:center;",
+          
+          radioButtons(
+            "cc_prob_type",
+            "Probability Method",
+            choices = c(
+              "triMean" = "triMean",
+              "truncatedMean(0.1)" = "truncatedmean_0.1",
+              "truncatedMean(0.05)" = "truncatedmean_0.05"
+            ),
+            selected = "triMean",
+            inline = TRUE
+          ),
+          
+          div(
+            style = "margin-left:15px;",
+            actionButton(
+              "recommend_cc_prob_type",
+              "Calculate recommended method",
+              class = "btn-primary"
+            )
+          )
+        ),
+        numericInput("cc_min_cells", "Min Cells (filter)", value = 10, min = 1),
+        actionButton("cc_run_analysis", "Run CellChat Analysis",
+                     class = "btn-success",
+                     style = "margin-top: 20px;")
+      )
+    }
+  })
+  # ----------------- Visualization UI (VIOLIN, DOTPLOT, VOLCANO, NES...) -----------------
   output$viz_panel <- renderUI({
     req(input$viz_tabs)
     tagList(
@@ -1320,7 +1463,9 @@ server <- function(input, output, session) {
              "feature" = uiOutput("feature_ui"),
              "volcano" = uiOutput("volcano_ui"),
              "pathway_volcano" = uiOutput("pathway_volcano_ui"),
-             "gsea_nes" = uiOutput("gsea_nes_ui")
+             "gsea_nes" = uiOutput("gsea_nes_ui"),
+             "cccv" = uiOutput("cccv_ui"),
+             "cccv_condition" = uiOutput("cccv_condition_ui")
       ),
       br(),br(),br(),br(),br()
     )
@@ -1459,6 +1604,34 @@ server <- function(input, output, session) {
     )
   })
   
+  # CELL CELL COMMUNICATION UI
+  output$cccv_ui <- renderUI({
+    tagList(
+    h4("Cell Cell Communication result:"),
+    path_input_ui(
+      id = "cccd",
+      label = "Cell Cell Communication File Path (.rds)",
+      placeholder = "/path/to/cellchat_object_list.rds or /path/to/cellchat_object.rds",
+      value = rv$cccd_obj_path),
+    br(),
+    uiOutput("cccv_control_ui")
+    )
+  })
+  
+  # CELL CELL COMMUNICATION - CONDITON UI
+  output$cccv_condition_ui <- renderUI({
+    tagList(
+      h4("Cell Cell Communication result:"),
+      path_input_ui(
+        id = "cccd",
+        label = "Cell Cell Communication File Path (.rds), must be included control and treatment information",
+        placeholder = "/path/to/cellchat_object_list.rds",
+        value = rv$cccd_obj_path),
+      br(),
+      uiOutput("cccv_condition_control_ui")
+    )
+  })
+  
   # ----------------- Violin plot UI, Check whether data_obj exist (copy) -----------------
   output$violin_plot_tabs_ui <- renderUI({
     
@@ -1494,7 +1667,7 @@ server <- function(input, output, session) {
       hr(),
       div(
         style = "display: flex; justify-content: center;",
-        plotOutput("original_violin_plot", height = "288px", width = "384px")),
+        uiOutput("original_violin_plot_ui")),
       
       hr(),
       
@@ -1511,7 +1684,8 @@ server <- function(input, output, session) {
         column(3, numericInput("v_height", "Graph height (inch)", value = 3))
       ),
       fluidRow(
-        column(4, div(style = "padding-top: 22px;", checkboxInput("v_show_points", "Show points", value = TRUE)))
+        column(4, checkboxInput("v_show_points", "Show points", value = TRUE)),
+        column(4, checkboxInput("v_show_non_zero", "Show non-zero proportion", value = TRUE))
       ),
       hr(),
       textInput(
@@ -1550,7 +1724,7 @@ server <- function(input, output, session) {
     tagList(
       h3("Stack Violin Plot"),
       hr(),
-      actionButton("set_group_gene", "Set the grouping and color of the genes", class = "btn-info", width = "100%"),
+      actionButton("set_group_gene", "Set the grouping and color of genes", class = "btn-info", width = "100%"),
       br(),br(),
       div(
         style = "display: flex; justify-content: center;",
@@ -1605,7 +1779,7 @@ server <- function(input, output, session) {
       tagList(
         div(
           style = "display: flex; justify-content: center;",
-          plotOutput("dotplot_plot", height = "288px", width = "480px")),
+          uiOutput("dotplot_plot_ui")),
         fluidRow(
           column(3, numericInput("dotplot_x_text_size", "X text size", value = 10)),
           column(3, numericInput("dotplot_y_text_size", "Y text size", value = 10)),
@@ -2002,6 +2176,227 @@ server <- function(input, output, session) {
         )
       }})
   
+  # ----------------- Cell Cell Communication Control UI -----------------
+  output$cccv_control_ui <- renderUI({
+    if (is.null(rv$cccd_obj)) {
+        div(
+          style = "padding: 15px; background-color: #fff3cd; border: 1px solid #ffeeba; border-radius: 5px;",
+          "Please upload the cell cell communication result from `Cell-Cell Communication Analysis` tab."
+        )
+      
+    } else {
+      tabsetPanel(
+        tabPanel("Cluster Level", uiOutput("ccc_cluster_control_ui")),
+        tabPanel("Pathway Level", uiOutput("ccc_pathway_control_ui")),
+        tabPanel("L-R Pair Level", uiOutput("ccc_pair_control_ui"))
+      )
+    }
+})
+  
+  output$cccv_condition_control_ui <- renderUI({
+    if (is.null(rv$cccd_obj) | is.null(rv$cccd_obj$data_merge)){
+      div(
+        style = "padding: 15px; background-color: #fff3cd; border: 1px solid #ffeeba; border-radius: 5px;",
+        "Please upload the cell cell communication result from `Cell-Cell Communication Analysis` tab. Also make sure the upload file includes control treatment information (cellchat_object_list.rds)"
+      )
+      
+    } else {
+      tabsetPanel(
+        tabPanel("Overall Level", uiOutput("cccc_overall_control_ui")),
+        tabPanel("Cluster Level", uiOutput("cccc_cluster_control_ui")),
+        tabPanel("Pathway Level", uiOutput("cccc_pathway_control_ui")),
+        tabPanel("L-R Pair Level", uiOutput("cccc_pair_control_ui"))
+      )
+    }
+  })
+  # ----------------- Cell Cell Communication UI - cluster-----------------
+  output$ccc_cluster_control_ui <- renderUI({
+    tabsetPanel(
+      
+      tabPanel(
+        "Communication Network",
+        uiOutput("netVisual_circle_ui")# netVisual_circle
+      ),
+      
+      tabPanel(
+        "Sender vs Receiver Roles",
+        uiOutput("netAnalysis_signalingRole_scatter_ui")# netAnalysis_signalingRole_scatter
+      )
+    )
+  })
+  
+  output$netVisual_circle_ui <- renderUI({
+    tagList(
+      div(
+        style = "display: flex; justify-content: center;",
+        plotOutput("netVisual_circle_plot_ui")
+      ),
+      
+      fluidRow(
+        column(
+          3,
+          selectInput(
+            "circle_measure",
+            "Network measure",
+            choices = c(
+              "Interaction count" = "count",
+              "Interaction weight" = "weight"
+            ),
+            selected = "weight"
+          )),
+        column(3, numericInput("circle_vertex_label_size", "Cell group label size", value = 1.0)),
+        column(3, numericInput("circle_vertex_size", "Node size", value = 30)),
+        column(3, numericInput("circle_edge_width_max", "Max line width", value = 10))
+      ),
+      
+      fluidRow(
+        column(3, numericInput("circle_arrow_size", "Arrow size", value = 0.2)),
+        column(3, numericInput("circle_title_size", "Title size", value = 1.2)),
+        column(3, checkboxInput("circle_show_edge_label", "Show edge label", value = FALSE)),
+        column(3, checkboxInput("circle_remove_isolate", "Remove isolated cell groups", value = FALSE))
+      ),
+      
+      fluidRow(
+        column(3, numericInput("circle_width", "PDF width (inch)", value = if(is.null(rv$cccd_obj$data_merge)){4}else{8})),
+        column(3, numericInput("circle_height", "PDF height (inch)", value = 4))
+    ),
+    fluidRow(
+      column(
+        12,
+        textInput(
+          "circle_save_path",
+          "Output directory",
+          value = file.path(rv$save_path, "CellCellCommunication"),
+          width = "100%"
+        )
+      )
+    ),
+    
+    fluidRow(
+      column(
+        6,
+        actionButton(
+          "circle_barplot",
+          "Save Graph",
+          style = "background-color: #87cefa; color: white; width: 100%;"
+        )
+      ),
+      column(
+        6,
+        downloadButton(
+          "download_circle",
+          "Download plot",
+          style = "background-color: #4CAF50; color: white; width: 100%;"
+        )
+      )
+    )
+    )
+  })
+  
+  output$netAnalysis_signalingRole_scatter_ui <- renderUI({
+    tagList(
+      div(
+        style = "display: flex; justify-content: center;",
+        plotOutput("netAnalysis_signalingRole_scatter_plot")
+      ),
+      
+      fluidRow(
+        column(3, numericInput("role_scatter_label_size", "Label size", value = 8)),
+        column(3, numericInput("role_scatter_point_size", "Point size", value = 5)),
+        column(3, numericInput("role_scatter_title_size", "Title size", value = 14)),
+        column(3, numericInput("role_scatter_axis_text_size", "Axis text size", value = 10))
+      ),
+      
+      fluidRow(
+        column(3, numericInput("role_scatter_axis_title_size", "Axis title size", value = 12)),
+        column(3, numericInput("role_scatter_legend_text_size", "Legend text size", value = 10)),
+        column(3, numericInput("role_scatter_legend_title_size", "Legend title size", value = 11)),
+        column(3, selectInput(
+          "role_scatter_legend_position",
+          "Legend position",
+          choices = c("right", "left", "top", "bottom", "none"),
+          selected = "right"
+        ))
+      ),
+      
+      fluidRow(
+        column(3, numericInput("role_scatter_width", "PDF width (inch)", value = if(is.null(rv$cccd_obj$data_merge)){4}else{8})),
+        column(3, numericInput("role_scatter_height", "PDF height (inch)", value = 3))
+      ),
+      
+      fluidRow(
+        column(
+          12,
+          textInput(
+            "role_scatter_save_path",
+            "Output directory",
+            value = file.path(rv$save_path, "CellCellCommunication"),
+            width = "100%"
+          )
+        )
+      ),
+      
+      fluidRow(
+        column(
+          6,
+          actionButton(
+            "save_role_scatter",
+            "Save Graph",
+            style = "background-color: #87cefa; color: white; width: 100%;"
+          )
+        ),
+        column(
+          6,
+          downloadButton(
+            "download_role_scatter",
+            "Download plot",
+            style = "background-color: #4CAF50; color: white; width: 100%;"
+          )
+        )
+      )
+    )
+  })
+  # ----------------- Cell Cell Communication UI - pathway-----------------
+  output$ccc_pathway_control_ui <- renderUI({
+    tabsetPanel(
+      tabPanel(
+        "Pathway Network",
+        uiOutput("netVisual_aggregate_ui")
+      ),
+      tabPanel(
+        "Pathway Heatmap",
+        uiOutput("netVisual_heatmap_ui")
+      ),
+      tabPanel(
+        "Pathway Role Heatmap",
+        uiOutput("netAnalysis_signalingRole_heatmap_ui")
+      ),
+      tabPanel(
+        "L-R Contribution",
+        uiOutput("netAnalysis_contribution_ui")
+      )
+    )
+  })
+  # ----------------- Cell Cell Communication UI - LRpair-----------------
+  output$ccc_pair_control_ui <- renderUI({
+    NULL
+  })
+  # ----------------- Cell Cell Communication Comparison UI - overall-----------------
+  output$cccc_overall_control_ui <- renderUI({
+    NULL
+  })
+  # ----------------- Cell Cell Communication Comparison UI - cluster-----------------
+  output$cccc_cluster_control_ui <- renderUI({
+    NULL
+  })
+  # ----------------- Cell Cell Communication Comparison UI - pathway-----------------
+  output$cccc_pathway_control_ui <- renderUI({
+    NULL
+  })
+  # ----------------- Cell Cell Communication Comparison UI - LRpair-----------------
+  output$cccc_pair_control_ui <- renderUI({
+    NULL
+  })
   # ----------------- Data Output UI-----------------
   output$data_output_ui <- renderUI({
     req(input$do_tabs)
@@ -2041,6 +2436,11 @@ server <- function(input, output, session) {
   observeEvent(input$reset_gsea_obj_btn, {
     rv$gsea_obj <- NULL
     rv$gsea_obj_path <- NULL
+  })
+  
+  observeEvent(input$reset_cccd_obj_btn, {
+    rv$cccd_obj <- NULL
+    rv$cccd_obj_path <- NULL
   })
   
   # DEG window 1 - Analysis Summary
@@ -2427,6 +2827,409 @@ server <- function(input, output, session) {
     )
   })
   
+  # ----------------- Cell Cell Communication FUNCTION -----------------
+  observeEvent(input$open_sample_group_modal, {
+    req(rv$data_obj)
+    rv$ui_freeze = TRUE
+    showModal(
+      modalDialog(
+        title = "Set sample groups",
+        size = "l",
+        easyClose = FALSE,
+        
+        selectInput(
+          "sample_column_modal",
+          HTML("Select meta.data <b style='color: red;'>sample</b> column"),
+          choices = c("All Together", extract_meta_columns(rv$data_obj)),
+          selected = if (!is.null(rv$sample_infor$sample_column)) rv$sample_infor$sample_column else NULL,
+          width = "100%"
+        ),
+        
+        uiOutput("sample_group_bucket_ui"),
+        
+        footer = tagList(
+          actionButton("confirm_sample_groups", "Confirm", class = "btn-primary")
+        )
+      )
+    )
+  })
+  
+  output$sample_group_bucket_ui <- renderUI({
+    req(rv$data_obj)
+    req(input$sample_column_modal)
+    
+    if (input$sample_column_modal == "All Together") {
+      sample_levels <- "All Together"
+    } else {
+      sample_levels <- unique(as.character(
+        rv$data_obj@meta.data[[input$sample_column_modal]]
+      ))
+      sample_levels <- sample_levels[!is.na(sample_levels)]
+      sample_levels <- sort(sample_levels)
+    
+    tagList(
+      
+      rank_list(
+        text = "Initial Pool",
+        labels = sample_levels,
+        input_id = "initial_pool",
+        options = sortable_options(group = "sample_groups")
+      ),
+      
+      br(),
+      
+      fluidRow(
+        
+        column(
+          6,
+          rank_list(
+            text = "CONTROL",
+            labels = character(0),
+            input_id = "control_pool",
+            options = sortable_options(group = "sample_groups")
+          )
+        ),
+        
+        column(
+          6,
+          rank_list(
+            text = "TREATMENT",
+            labels = character(0),
+            input_id = "treatment_pool",
+            options = sortable_options(group = "sample_groups")
+          )
+        )
+        
+      )
+    )}
+  })
+  
+  observeEvent(input$confirm_sample_groups, {
+    
+    req(input$sample_column_modal)
+    
+    rv$ui_freeze <- FALSE
+    
+    if (input$sample_column_modal == "All Together") {
+      
+      rv$sample_infor <- list(
+        sample_column = "All Together",
+        control = NULL,
+        treatment = NULL,
+        unused = NULL
+      )
+      
+    } else {
+      
+      validate(
+        need(length(input$control_pool) > 0,
+             "Please assign at least one sample to CONTROL"),
+        need(length(input$treatment_pool) > 0,
+             "Please assign at least one sample to TREATMENT")
+      )
+      
+      rv$sample_infor <- list(
+        sample_column = input$sample_column_modal,
+        control = input$control_pool,
+        treatment = input$treatment_pool,
+        unused = input$initial_pool
+      )
+      
+    }
+    
+    removeModal()
+  })
+  
+  observeEvent(input$recommend_cc_prob_type, {
+    if (
+      is.null(input$cluster_column) ||
+      input$cluster_column == "" ||
+      input$cluster_column == "None"
+    ) {
+      
+      showModal(
+        modalDialog(
+          title = "Missing Cell Type Annotation",
+          
+          tags$div(
+            style = "text-align:center;",
+            
+            tags$h4(
+              "Please add meta.data celltype cluster identification first.",
+              style = "color:red;"
+            ),
+            
+            tags$p(
+              "Select `meta.data celltype cluster identification` before calculating the recommended CellChat probability method."
+            )
+          ),
+          
+          easyClose = TRUE,
+          footer = modalButton("Close")
+        )
+      )
+      
+      return(NULL)
+    }
+    req(rv$data_obj)
+    
+    showModal(
+      modalDialog(
+        title = "Calculating recommended method",
+        div(
+          style = "text-align:center;",
+          tags$h4("Calculating recommended CellChat probability method..."),
+          tags$p("Please wait.")
+        ),
+        footer = NULL,
+        easyClose = FALSE
+      )
+    )
+    source("CCC.R")
+    res <- diagnose_cellchat_summary_method(
+      seurat_obj = rv$data_obj,
+      group.by = input$cluster_column,
+      assay = "RNA",
+      layer = "data",
+      cellchat_db = input$cc_species,
+      trim_values = c(0.1, 0.05)
+    )
+    
+    recommended_method <- res$recommendation$recommended_method
+    
+    recommended_method_display <- switch(
+      recommended_method,
+      "triMean" = "triMean",
+      "truncatedMean(0.1)" = "truncatedmean_0.1",
+      "truncatedMean(0.05)" = "truncatedmean_0.05",
+      "triMean"
+    )
+    
+    updateRadioButtons(
+      session,
+      "cc_prob_type",
+      selected = recommended_method_display
+    )
+    
+    showModal(
+      modalDialog(
+        title = "Recommended CellChat Probability Method",
+        
+        tags$div(
+          tags$h4("Recommended method:"),
+          tags$h3(
+            recommended_method,
+            style = "color:red; font-weight:bold;"
+          ),
+          tags$p(
+            res$recommendation$final_recommendation,
+            style = "font-size:14px;"
+          )
+        ),
+        
+        tags$hr(),
+        
+        tags$h4("Method summary"),
+        tags$p("Using the list of genes from all LR (ligand-receptor) pairs, identify interactions between these genes and the gene list in our dataset; perform calculations using all four methods and count the number of genes with values greater than zero."),
+        tags$div(
+          style = "overflow-x:auto; width:100%;",
+          tableOutput("cc_method_summary_table")
+        ),
+        
+        easyClose = TRUE,
+        footer = modalButton("Close"),
+        size = "l"
+      )
+    )
+    
+    output$cc_method_summary_table <- renderTable({
+      res$method_summary
+    })
+  })
+  
+  observeEvent(input$cc_run_analysis, {
+    
+    req(rv$data_obj)
+    req(input$cluster_column)
+    showModal(
+      modalDialog(
+        title = "Review CellChat Parameters",
+        size = "l",
+        
+        h4("📋 Review Parameters"),
+        
+        tags$div(
+          style = "background-color: #f5f5f5; padding: 15px; border-radius: 5px; border-left: 4px solid #2196F3;",
+          
+          tags$table(
+            style = "width: 100%;",
+            tags$tr(
+              tags$td(style = "padding: 8px; font-weight: bold; width: 150px;", "Data File:"),
+              tags$td(style = "padding: 8px;", tags$code(input$data_path))
+            ),
+            tags$tr(
+              tags$td(style = "padding: 8px; font-weight: bold;", "Sample Setting:"),
+              tags$td(
+                style = "padding: 8px;",
+                if (is.null(rv$sample_infor)) {
+                  "Not set"
+                } else if (rv$sample_infor$sample_column == "All Together") {
+                  "All Together"
+                } else {
+                  paste0(
+                    rv$sample_infor$sample_column,
+                    " | CONTROL: ", paste(rv$sample_infor$control, collapse = ", "),
+                    " | TREATMENT: ", paste(rv$sample_infor$treatment, collapse = ", ")
+                  )
+                }
+              )
+            ),
+            tags$tr(
+              tags$td(style = "padding: 8px; font-weight: bold;", "Cell Type Column:"),
+              tags$td(style = "padding: 8px;", input$cluster_column)
+            ),
+            tags$tr(
+              tags$td(style = "padding: 8px; font-weight: bold;", "Species:"),
+              tags$td(style = "padding: 8px;", input$cc_species)
+            ),
+            tags$tr(
+              tags$td(style = "padding: 8px; font-weight: bold;", "Pathways:"),
+              tags$td(style = "padding: 8px;", paste(input$cc_pathway_type, collapse = ", "))
+            ),
+            tags$tr(
+              tags$td(style = "padding: 8px; font-weight: bold;", "Probability Method:"),
+              tags$td(style = "padding: 8px;", input$cc_prob_type)
+            ),
+            tags$tr(
+              tags$td(style = "padding: 8px; font-weight: bold;", "Min Cells:"),
+              tags$td(style = "padding: 8px;", input$cc_min_cells)
+            )
+          )
+        ),
+        
+        hr(),
+        
+        h4("📝 Analysis Configuration"),
+        
+        fluidRow(
+          column(6, textInput("cc_project_name", "Project Name on SCC", 
+                              placeholder = "e.g., wax-es",
+                              width = "100%")),
+          column(6, numericInput("cc_core_number", "CPU Cores", 
+                                 value = 8, min = 1, max = 32, width = "100%"))
+        ),
+        
+        fluidRow(
+          column(6, numericInput("cc_task_hours", "Task Time (hours)", 
+                                 value = 12, min = 0.5, max = 24, step = 0.5, width = "100%")),
+          
+          column(6, textInput("cc_email", "Email (for notification)", 
+                               placeholder = "user@example.com",
+                               width = "100%"))
+
+        ),
+        textInput("cc_save_path", "Result Folder", 
+                            placeholder = "/path/to/save/folder",
+                            width = "100%"),
+        
+        
+        footer = tagList(
+          modalButton("Close"),
+          actionButton("cc_start_analysis", "Start Analysis on Background", 
+                       class = "btn-success btn-lg",
+                       style = "margin-left: 10px;")
+        )
+      )
+    )
+  })
+  
+  observeEvent(input$cc_start_analysis,{
+    source("CCC.R")
+    
+    if (is.null(input$cc_project_name) || input$cc_project_name == "") {
+      showNotification("Please enter project name on SCC", type = "error")
+      return()
+    }
+    
+    if (is.null(input$cc_save_path) || input$cc_save_path == "") {
+      showNotification("Please enter result folder path", type = "error")
+      return()
+    }
+    req(rv$sample_infor)
+    
+    sample_info <- rv$sample_infor
+    
+    if (sample_info$sample_column != "All Together") {
+      if (length(sample_info$control) == 0 || length(sample_info$treatment) == 0) {
+        showNotification("Please assign samples to both CONTROL and TREATMENT.", type = "error")
+        return()
+      }
+    }
+    cluster_column <- input$cluster_column
+    cc_species <- input$cc_species
+    cc_pathway_type <- input$cc_pathway_type
+    cc_prob_type <- input$cc_prob_type
+    cc_min_cells <- input$cc_min_cells
+    cc_save_path <- input$cc_save_path
+    cc_project_name <- input$cc_project_name
+    cc_task_hours <- input$cc_task_hours
+    cc_core_number <- input$cc_core_number
+    cc_email <- input$cc_email
+    
+    showModal(modalDialog(
+      title = "Preparing Cell Cell Communication mission file",
+      "Please wait, after data preparing completed you will get the qsub mission id.",
+      easyClose = FALSE,
+      footer = NULL
+    ))
+    
+    tryCatch({
+      mission_id <- run_ccc(
+        seurat_file_path = input$data_path,
+        sample_info = sample_info,
+        cluster_column = cluster_column,
+        species = cc_species,
+        pathway_type = cc_pathway_type,
+        prob_type = cc_prob_type,
+        min_cells = cc_min_cells,
+        save_path = cc_save_path,
+        project_name = cc_project_name,
+        runtime = cc_task_hours,
+        cores = cc_core_number,
+        email = cc_email
+      )
+      
+      rv$cc_mission_id <- mission_id
+      
+      showModal(
+        modalDialog(
+          title = "Clustering Visualization Job Submitted",
+          tagList(
+            p("The Clustering analysis is now running in the background."),
+            p("Your job ID is:"),
+            tags$pre(style = "color: red; user-select: text;", mission_id),
+            p("You can copy the following command in the SCC terminal to check the job status:"),
+            tags$pre(style = "color: red; user-select: text;", paste0("qstat -j ", mission_id)),
+            p("You can now close the shinyapp and wait for the results."),
+            p("For subsequent analysis, it is recommended to use the following path of seurat rds file as input:"),
+            tags$pre(style = "color: blue; user-select: text;", 
+                     file.path(input$cc_save_path, "input_seurat_file.rds")),
+            if (nchar(input$cc_email) > 0) {
+              p("The results will be sent to your email address: ", input$cc_email)
+            } else {
+              NULL
+            }
+          ),
+          footer = modalButton("Close"),
+          easyClose = TRUE
+        )
+      )
+      
+    }, error = function(e) {
+      removeModal()
+      showModal(modalDialog(title = "Error", e$message, easyClose = TRUE))
+    })
+  })
   # ----------------- VISUALIZATION FUNCTION Marker Select -----------------
   
   observeEvent(input$marker_select_btn, {
@@ -2972,21 +3775,43 @@ server <- function(input, output, session) {
       rv$visualization_sample_column <- ""
     }
     
+    if (is.null(rv$visualization_split_column)) {
+      rv$visualization_split_column <- ""
+    }
+    
+    if (is.null(rv$visualization_use_split)) {
+      rv$visualization_use_split <- FALSE
+    }
+    
     showModal(modalDialog(
       title = "sample/celltype identification select",
       
       tagList(
         
-        # ====== select sample column ======
+        # ====== select sample column (in graph) ======
         selectInput(
           inputId = "sample_ident_col",
-          label   = "Sample/celltype identification column",
+          label   = "Sample/celltype identification column in graph",
           choices = sample_cols,
-          selected = rv$visualization_sample_column
+          selected = rv$visualization_sample_column,
+          width = "100%"
         ),
         
         # ====== UMAP plot（conditional UI）======
-        uiOutput("umap_in_modal_ui")
+        uiOutput("umap_in_modal_ui"),
+        
+        # ====== checkbox for split ======
+        checkboxInput(
+          inputId = "enable_split_by_metadata",
+          label = "Split by additional metadata",
+          value = rv$visualization_use_split
+        ),
+        
+        # ====== select split column (conditional) ======
+        uiOutput("split_meta_select_ui"),
+        
+        # ====== UMAP plot for split (conditional) ======
+        uiOutput("umap_split_in_modal_ui")
       ),
       
       footer = tagList(
@@ -3010,6 +3835,7 @@ server <- function(input, output, session) {
     
     tagList(
       hr(),
+      h4("Main UMAP Preview"),
       plotOutput("umap_modal_plot", height = "400px")
     )
   })
@@ -3028,11 +3854,79 @@ server <- function(input, output, session) {
     )
   })
   
+  output$split_meta_select_ui <- renderUI({
+    
+    req(input$enable_split_by_metadata)
+    
+    meta_cols <- colnames(rv$data_obj@meta.data)
+    
+    meta_df <- rv$data_obj@meta.data
+    valid_cols <- meta_cols[
+      sapply(meta_df[, meta_cols, drop = FALSE], function(x) {
+        !is.numeric(x)
+      })
+    ]
+    
+    split_cols <- c("", setdiff(valid_cols, c("CB", "CB_original", input$sample_ident_col)))
+    
+    selectInput(
+      inputId = "split_ident_col",
+      label   = "Metadata column to split by",
+      choices = split_cols,
+      selected = if (!is.null(rv$visualization_split_column)) rv$visualization_split_column else "",
+      width = "100%"
+    )
+  })
+  
+  output$umap_split_in_modal_ui <- renderUI({
+    
+    req(input$enable_split_by_metadata)
+    req(input$split_ident_col)
+    req(input$split_ident_col != "")
+    
+    has_umap <- "umap" %in% names(rv$data_obj@reductions)
+    
+    if (!has_umap) {
+      return(tags$div("No UMAP found in this Seurat object"))
+    }
+    
+    tagList(
+      hr(),
+      h4("Split UMAP Preview"),
+      plotOutput("umap_split_modal_plot", height = "500px")
+    )
+  })
+  
+  output$umap_split_modal_plot <- renderPlot({
+    
+    req(input$enable_split_by_metadata)
+    req(input$split_ident_col)
+    req(input$split_ident_col != "")
+    
+    req("umap" %in% names(rv$data_obj@reductions))
+    
+    DimPlot(
+      rv$data_obj,
+      reduction = "umap",
+      group.by  = input$sample_ident_col,
+      split.by  = input$split_ident_col,
+      ncol      = 3
+    )
+  })
+  
   observeEvent(input$confirm_sample_ident, {
     
     req(rv$data_obj)
     
     rv$visualization_sample_column <- input$sample_ident_col
+    rv$visualization_use_split <- input$enable_split_by_metadata
+    
+    if (input$enable_split_by_metadata && !is.null(input$split_ident_col)) {
+      rv$visualization_split_column <- input$split_ident_col
+    } else {
+      rv$visualization_split_column <- ""
+    }
+    
     rv$ui_freeze = FALSE
     removeModal()
   })
@@ -3280,9 +4174,6 @@ server <- function(input, output, session) {
     
     valid_idx <- which(df$ID %in% selected_pathway_name)
     
-    # -------------------------
-    # select columns to show
-    # -------------------------
     df_show <- df[, !(colnames(df) %in% c(
       "Description",
       "enrichmentScore",
@@ -3611,116 +4502,236 @@ server <- function(input, output, session) {
     rv$ui_freeze <- FALSE
   })
   # ----------------- VISUALIZATION FUNCTION Original Violin Plot -----------------
-  output$original_violin_plot <- renderPlot({
+
+  visualization_data_prepared <- reactive({
     
     req(rv$data_obj)
     req(rv$visualization_marker)
     req(rv$visualization_sample_column != "")
     req(!rv$ui_freeze)
+    showModal(modalDialog(
+      title = "Processing Data for Visualization",
+      tags$div("Preparing ..."),
+      easyClose = FALSE,
+      footer = NULL
+    ))
+    sample_col <- rv$visualization_sample_column
+    use_split   <- rv$visualization_use_split
+    split_col   <- rv$visualization_split_column
     
     markers <- unlist(strsplit(rv$visualization_marker, "\n"))
     markers <- trimws(markers)
     markers <- markers[markers != "" & !is.na(markers)]
     valid_genes <- rownames(rv$data_obj)
-    
     genes <- markers[markers %in% valid_genes][1]
-    VlnPlot(
-      rv$data_obj,
-      features = genes,
-      group.by = rv$visualization_sample_column,
-      pt.size = if (input$v_show_points) 0.5 else 0
-    ) +
-      ggplot2::labs(
-        title = paste0(genes,"_example"),
-        x = rv$visualization_sample_column,
-        y = "Expression"
-      ) +
-      ggplot2::theme(
-        axis.title.x = ggplot2::element_text(size = input$v_x_lab_size),
-        axis.title.y = ggplot2::element_text(size = input$v_y_lab_size),
-        axis.text.x = ggplot2::element_text(
-          size = input$v_x_text_size,
-          angle = input$v_angle, 
-          hjust = 0.5, vjust = 0.5
-        ),
-        axis.text.y = ggplot2::element_text(
-          size = input$v_y_text_size
-        ),
-        plot.title = ggplot2::element_text(
-          size = input$v_title_size,
-          hjust = 0.5
-        ),
-        
-        legend.position = "none"
+    
+    if (isTRUE(use_split) && !is.null(split_col) && split_col != "") {
+      
+      meta_vec <- rv$data_obj@meta.data[[split_col]]
+      
+      if (is.factor(meta_vec)) {
+        split_vals <- levels(meta_vec)
+        split_vals <- split_vals[split_vals %in% unique(meta_vec)]
+      } else {
+        split_vals <- sort(unique(meta_vec))
+        split_vals <- split_vals[!is.na(split_vals)]
+      }
+      
+      split_data <- lapply(split_vals, function(split_val) {
+        subset(rv$data_obj, subset = !!as.name(split_col) == split_val)
+      })
+      removeModal()
+      list(
+        gene = genes,
+        split_data = split_data,
+        split_vals = split_vals,
+        has_split = TRUE,
+        sample_col = sample_col,
+        split_col = split_col
       )
+      
+    } else {
+      removeModal()
+      list(
+        gene = genes,
+        data = rv$data_obj,
+        has_split = FALSE,
+        sample_col = sample_col,
+        split_col = NULL
+      )
+    }
   })
   
-  # Helper function to generate violin plots directly as PNG
-  generate_violin_plot_png <- function(seurat_obj, gene, output_file,
-                                       group.by = NULL,
-                                       pt.size = 0.5,
-                                       show_points = TRUE,
-                                       x_lab_size = 12,
-                                       y_lab_size = 12,
-                                       x_text_size = 10,
-                                       y_text_size = 10,
-                                       title_size = 14,
-                                       angle = 0,
-                                       dpi = 300,
-                                       width = 7,
-                                       height = 7) {
+  output$original_violin_plot_ui <- renderUI({
     
-    library(Seurat)
-    library(ggplot2)
+    if (!is.null(rv$visualization_split_column) && rv$visualization_split_column != "") {
+      n_splits <- length(unique(rv$data_obj@meta.data[[rv$visualization_split_column]]))
+      width_val <- paste0(n_splits * 350, "px")  
+    } else {
+      width_val <- "384px"
+    }
     
-    # Adjust pt.size based on show_points
-    pt.size_val <- if (show_points) pt.size else 0
+    div(
+      style = "max-width: 800px; overflow-x: auto; width: 100%;",
+      plotOutput("original_violin_plot", height = "288px", width = width_val)
+    )
+  })
+  
+  output$original_violin_plot <- renderPlot({
     
-    # Create PNG directly (much smaller than PDF)
-    png(output_file, width = width * dpi, height = height * dpi, res = dpi)
+    data_prep <- visualization_data_prepared()
+    genes <- data_prep$gene
     
-    print(
+    if (data_prep$has_split) {
+      plot_list <- lapply(seq_along(data_prep$split_data), function(i) {
+        subset_obj <- data_prep$split_data[[i]]
+        split_val <- data_prep$split_vals[i]
+        
+        x_labels <- names(table(subset_obj@meta.data[[rv$visualization_sample_column]]))
+        
+        if (input$v_show_non_zero) {
+          percentages <- get_non_zero_percentage(
+            subset_obj, 
+            genes, 
+            rv$visualization_sample_column
+          )
+          
+          if (!is.null(percentages)) {
+            x_labels <- sapply(x_labels, function(label) {
+              pct <- percentages[label]
+              if (!is.na(pct)) {
+                paste0(label, "\n(", sprintf("%.1f", pct), "%)")
+              } else {
+                label
+              }
+            })
+          }
+        }
+        
+        VlnPlot(
+          subset_obj,
+          features = genes,
+          group.by = rv$visualization_sample_column,
+          pt.size = if (input$v_show_points) 0.5 else 0
+        ) +
+          ggplot2::scale_x_discrete(labels = x_labels) +
+          ggplot2::labs(
+            title = paste0(genes, " (", split_val, ")"),
+            x = rv$visualization_sample_column,
+            y = "Expression"
+          ) +
+          ggplot2::theme(
+            axis.title.x = ggplot2::element_text(size = input$v_x_lab_size),
+            axis.title.y = ggplot2::element_text(size = input$v_y_lab_size),
+            axis.text.x = ggplot2::element_text(
+              size = input$v_x_text_size,
+              angle = input$v_angle, 
+              hjust = 0.5, vjust = 0.5
+            ),
+            axis.text.y = ggplot2::element_text(
+              size = input$v_y_text_size
+            ),
+            plot.title = ggplot2::element_text(
+              size = input$v_title_size,
+              hjust = 0.5
+            ),
+            legend.position = "none"
+          )
+      })
+      
+      patchwork::wrap_plots(plot_list, ncol = length(data_prep$split_vals))
+      
+    } else {
+      x_labels <- names(table(data_prep$data@meta.data[[rv$visualization_sample_column]]))
+      
+      if (input$v_show_non_zero) {
+        percentages <- get_non_zero_percentage(
+          data_prep$data, 
+          genes, 
+          rv$visualization_sample_column
+        )
+        
+        if (!is.null(percentages)) {
+          x_labels <- sapply(x_labels, function(label) {
+            pct <- percentages[label]
+            if (!is.na(pct)) {
+              paste0(label, "\n(", sprintf("%.1f", pct), "%)")
+            } else {
+              label
+            }
+          })
+        }
+      }
+      
       VlnPlot(
-        seurat_obj,
-        features = gene,
-        group.by = group.by,
-        pt.size = pt.size_val
+        data_prep$data,
+        features = genes,
+        group.by = rv$visualization_sample_column,
+        pt.size = if (input$v_show_points) 0.5 else 0
       ) +
+        ggplot2::scale_x_discrete(labels = x_labels) +
         ggplot2::labs(
-          title = gene,
-          x = group.by,
+          title = paste0(genes,"_example"),
+          x = rv$visualization_sample_column,
           y = "Expression"
         ) +
         ggplot2::theme(
-          axis.title.x = ggplot2::element_text(size = x_lab_size),
-          axis.title.y = ggplot2::element_text(size = y_lab_size),
+          axis.title.x = ggplot2::element_text(size = input$v_x_lab_size),
+          axis.title.y = ggplot2::element_text(size = input$v_y_lab_size),
           axis.text.x = ggplot2::element_text(
-            size = x_text_size,
-            angle = angle,
+            size = input$v_x_text_size,
+            angle = input$v_angle, 
             hjust = 0.5, vjust = 0.5
           ),
           axis.text.y = ggplot2::element_text(
-            size = y_text_size
+            size = input$v_y_text_size
           ),
           plot.title = ggplot2::element_text(
-            size = title_size,
+            size = input$v_title_size,
             hjust = 0.5
           ),
           legend.position = "none"
         )
-    )
-    
-    dev.off()
+    }
+  }, height = function() 300)
+  
+  get_non_zero_percentage <- function(data_obj, feature, group_column) {
+    tryCatch({
+      expr_matrix <- GetAssayData(data_obj, layer = "data")
+      
+      if (!feature %in% rownames(expr_matrix)) {
+        return(NULL)
+      }
+      
+      gene_expr <- expr_matrix[feature, ]
+      groups <- data_obj@meta.data[[group_column]]
+      unique_groups <- unique(groups[!is.na(groups)])
+      
+      percentages <- sapply(unique_groups, function(g) {
+        group_mask <- groups == g
+        group_expr <- gene_expr[group_mask]
+        non_zero_count <- sum(group_expr > 0)
+        total_count <- sum(group_mask)
+        percentage <- (non_zero_count / total_count) * 100
+        percentage
+      })
+      
+      names(percentages) <- unique_groups
+      percentages
+    }, error = function(e) {
+      warning(paste("Error calculating non-zero percentage:", e$message))
+      return(NULL)
+    })
   }
   
-  # Helper function to combine PNGs into multi-page PDF
-  # Helper function to combine PNGs into multi-page PDF (8 per page, 2 per row)
-  combine_pngs_to_pdf_violin <- function(png_files, output_path, 
-                                  genes_per_page = 8,
-                                  genes_per_row = 2,
-                                  final_width = 8.5,
-                                  final_height = 11,
-                                  update_progress_fn = NULL) {
+  combine_pngs_to_pdf_violin <- function(png_files, output_path,
+                                         has_split = FALSE,
+                                         n_splits = 1,
+                                         genes_per_page = 8,
+                                         genes_per_row = 2,
+                                         final_width = 8.5,
+                                         final_height = 11,
+                                         update_progress_fn = NULL) {
     
     library(magick)
     
@@ -3732,10 +4743,8 @@ server <- function(input, output, session) {
       update_progress_fn("<b>Combining images into PDF...</b><br>Reading PNG files...")
     }
     
-    num_pages <- ceiling(length(png_files) / genes_per_page)
-    
     tryCatch({
-      # Read all PNG files
+      
       all_images <- list()
       for (i in seq_along(png_files)) {
         if (!is.null(update_progress_fn) && i %% 5 == 0) {
@@ -3746,84 +4755,83 @@ server <- function(input, output, session) {
         }
         
         tryCatch({
-          img <- magick::image_read(png_files[i])
-          all_images[[i]] <- img
+          all_images[[i]] <- magick::image_read(png_files[i])
         }, error = function(e) {
           warning(paste("Failed to read", png_files[i]))
         })
       }
       
-      # Create multi-page PDF
       if (!is.null(update_progress_fn)) {
         update_progress_fn("<b>Combining images into PDF...</b><br>Creating pages...")
       }
       
       page_images <- list()
+      num_pages <- ceiling(length(all_images) / genes_per_page)
       
-      for (page in 1:num_pages) {
+      for (page in seq_len(num_pages)) {
         start_idx <- (page - 1) * genes_per_page + 1
         end_idx <- min(page * genes_per_page, length(all_images))
         
-        # Get images for this page
         page_imgs <- all_images[start_idx:end_idx]
         page_imgs <- page_imgs[!sapply(page_imgs, is.null)]
         
-        if (length(page_imgs) > 0) {
-          # Arrange images in rows (2 per row)
+        if (length(page_imgs) == 0) next
+        
+        if (has_split) {
+          combined <- page_imgs[[1]]
+          if (length(page_imgs) > 1) {
+            for (k in 2:length(page_imgs)) {
+              combined <- magick::image_append(c(combined, page_imgs[[k]]), stack = TRUE)
+            }
+          }
+        } else {
           rows <- list()
-          num_rows <- ceiling(length(page_imgs) / genes_per_row)
+          n_rows <- ceiling(length(page_imgs) / genes_per_row)
           
-          for (row in 1:num_rows) {
-            row_start <- (row - 1) * genes_per_row + 1
-            row_end <- min(row * genes_per_row, length(page_imgs))
+          for (r in seq_len(n_rows)) {
+            row_start <- (r - 1) * genes_per_row + 1
+            row_end <- min(r * genes_per_row, length(page_imgs))
             row_imgs <- page_imgs[row_start:row_end]
             
-            # Stack images horizontally for this row
             row_combined <- row_imgs[[1]]
             if (length(row_imgs) > 1) {
               for (k in 2:length(row_imgs)) {
-                row_combined <- magick::image_append(c(row_combined, row_imgs[[k]]), 
-                                                     stack = FALSE)  # FALSE = horizontal
+                row_combined <- magick::image_append(c(row_combined, row_imgs[[k]]), stack = FALSE)
               }
             }
             
-            # If only 1 image in row, pad with white space to maintain alignment
-            if (length(row_imgs) < genes_per_row) {
-              img_width <- magick::image_info(row_combined)$width
-              img_height <- magick::image_info(row_combined)$height
-              
-              white_space <- magick::image_blank(width = img_width,
-                                                 height = img_height, 
-                                                 color = "white")
-              row_combined <- magick::image_append(c(row_combined, white_space), 
-                                                   stack = FALSE)
+            if (length(row_imgs) == 1) {
+              info <- magick::image_info(row_combined)
+              white_space <- magick::image_blank(
+                width = info$width,
+                height = info$height,
+                color = "white"
+              )
+              row_combined <- magick::image_append(c(row_combined, white_space), stack = FALSE)
             }
             
-            rows[[row]] <- row_combined
+            rows[[r]] <- row_combined
           }
           
-          # Stack all rows vertically
           combined <- rows[[1]]
           if (length(rows) > 1) {
             for (r in 2:length(rows)) {
-              combined <- magick::image_append(c(combined, rows[[r]]), 
-                                               stack = TRUE)  # TRUE = vertical
+              combined <- magick::image_append(c(combined, rows[[r]]), stack = TRUE)
             }
           }
-          
-          # Resize to fit page
-          info <- magick::image_info(combined)
-          combined <- magick::image_scale(combined, 
-                                          geometry = paste0(
-                                            as.integer(final_width * 300), "x",
-                                            as.integer(final_height * 300)
-                                          ))
-          
-          page_images[[page]] <- combined
         }
+        
+        combined <- magick::image_scale(
+          combined,
+          geometry = paste0(
+            as.integer(final_width * 300), "x",
+            as.integer(final_height * 300)
+          )
+        )
+        
+        page_images[[page]] <- combined
       }
       
-      # Combine all pages into single PDF
       if (!is.null(update_progress_fn)) {
         update_progress_fn("<b>Combining images into PDF...</b><br>Writing PDF...")
       }
@@ -3841,26 +4849,20 @@ server <- function(input, output, session) {
         update_progress_fn("<b>PDF created successfully!</b>")
       }
       
-      return(output_path)
+      output_path
       
     }, error = function(e) {
       stop(paste("Error combining PNGs:", e$message))
     })
   }
   
-  # Modified observeEvent for violin plots
   observeEvent(input$generate_all_violin, {
     
     req(rv$data_obj)
     
     showModal(modalDialog(
       title = "Processing Genes",
-      
-      tags$div(
-        id = "violin_progress_detail",
-        "Starting..."
-      ),
-      
+      tags$div(id = "violin_progress_detail", "Starting..."),
       easyClose = FALSE,
       footer = NULL
     ))
@@ -3877,16 +4879,32 @@ server <- function(input, output, session) {
       return()
     }
     
+    has_split <- !is.null(rv$visualization_split_column) && rv$visualization_split_column != ""
+    
+    if (has_split) {
+      split_vals <- unique(rv$data_obj@meta.data[[rv$visualization_split_column]])
+      split_vals <- split_vals[!is.na(split_vals)]
+      n_splits <- length(split_vals)
+      
+      split_data_list <- lapply(split_vals, function(split_val) {
+        subset(rv$data_obj, subset = !!as.name(rv$visualization_split_column) == split_val)
+      })
+    } else {
+      n_splits <- 1
+      split_data_list <- NULL
+      split_vals <- NULL
+    }
+    
     total <- length(markers)
     
     out_dir <- input$violin_save_path
     if (!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE)
+    
     generated_files <- c()
     png_dir <- file.path(out_dir, ".temp_png")
     if (!dir.exists(png_dir)) dir.create(png_dir, recursive = TRUE)
     png_files <- c()
     
-    # Step 1: Generate violin plots as PNG files
     for (i in seq_along(markers)) {
       genes <- markers[i]
       done <- i - 1
@@ -3903,66 +4921,232 @@ server <- function(input, output, session) {
       
       Sys.sleep(0.01)
       
-      # Save as PNG directly (much smaller than PDF)
       png_file <- file.path(png_dir, paste0(genes, ".png"))
       pdf_file <- file.path(out_dir, paste0(genes, ".pdf"))
       
       tryCatch({
-        # Generate PNG
-        generate_violin_plot_png(
-          seurat_obj = rv$data_obj,
-          gene = genes,
-          output_file = png_file,
-          group.by = rv$visualization_sample_column,
-          pt.size = if (input$v_show_points) 0.5 else 0,
-          show_points = input$v_show_points,
-          x_lab_size = input$v_x_lab_size,
-          y_lab_size = input$v_y_lab_size,
-          x_text_size = input$v_x_text_size,
-          y_text_size = input$v_y_text_size,
-          title_size = input$v_title_size,
-          angle = input$v_angle,
-          dpi = 300,  # Adjust DPI for quality/size tradeoff
-          width = input$v_width,
-          height = input$v_height
-        )
         
-        # Also create PDF for individual access
+        # ---------- PNG ----------
+        if (has_split) {
+          png_width <- input$v_width * n_splits * 300
+          png_height <- input$v_height * 300
+          
+          png(png_file, width = png_width, height = png_height, res = 300)
+          
+          plot_list <- lapply(seq_along(split_data_list), function(j) {
+            subset_obj <- split_data_list[[j]]
+            split_val <- split_vals[j]
+            
+            x_labels <- names(table(subset_obj@meta.data[[rv$visualization_sample_column]]))
+            
+            if (input$v_show_non_zero) {
+              percentages <- get_non_zero_percentage(
+                subset_obj, 
+                genes, 
+                rv$visualization_sample_column
+              )
+              
+              if (!is.null(percentages)) {
+                x_labels <- sapply(x_labels, function(label) {
+                  pct <- percentages[label]
+                  if (!is.na(pct)) {
+                    paste0(label, "\n(", sprintf("%.1f", pct), "%)")
+                  } else {
+                    label
+                  }
+                })
+              }
+            }
+            
+            VlnPlot(
+              subset_obj,
+              features = genes,
+              group.by = rv$visualization_sample_column,
+              pt.size = if (input$v_show_points) 0.5 else 0
+            ) +
+              ggplot2::scale_x_discrete(labels = x_labels) +
+              ggplot2::labs(
+                title = paste0(genes, " (", split_val, ")"),
+                x = rv$visualization_sample_column,
+                y = "Expression"
+              ) +
+              ggplot2::theme(
+                axis.title.x = ggplot2::element_text(size = input$v_x_lab_size),
+                axis.title.y = ggplot2::element_text(size = input$v_y_lab_size),
+                axis.text.x = ggplot2::element_text(
+                  size = input$v_x_text_size,
+                  angle = input$v_angle,
+                  hjust = 0.5, vjust = 0.5
+                ),
+                axis.text.y = ggplot2::element_text(size = input$v_y_text_size),
+                plot.title = ggplot2::element_text(size = input$v_title_size, hjust = 0.5),
+                legend.position = "none"
+              )
+          })
+          
+          print(patchwork::wrap_plots(plot_list, ncol = n_splits))
+          
+        } else {
+          png(png_file, width = input$v_width * 300, height = input$v_height * 300, res = 300)
+          
+          x_labels <- names(table(rv$data_obj@meta.data[[rv$visualization_sample_column]]))
+          
+          if (input$v_show_non_zero) {
+            percentages <- get_non_zero_percentage(
+              rv$data_obj, 
+              genes, 
+              rv$visualization_sample_column
+            )
+            
+            if (!is.null(percentages)) {
+              x_labels <- sapply(x_labels, function(label) {
+                pct <- percentages[label]
+                if (!is.na(pct)) {
+                  paste0(label, "\n(", sprintf("%.1f", pct), "%)")
+                } else {
+                  label
+                }
+              })
+            }
+          }
+          
+          print(
+            VlnPlot(
+              rv$data_obj,
+              features = genes,
+              group.by = rv$visualization_sample_column,
+              pt.size = if (input$v_show_points) 0.5 else 0
+            ) +
+              ggplot2::scale_x_discrete(labels = x_labels) +
+              ggplot2::labs(
+                title = genes,
+                x = rv$visualization_sample_column,
+                y = "Expression"
+              ) +
+              ggplot2::theme(
+                axis.title.x = ggplot2::element_text(size = input$v_x_lab_size),
+                axis.title.y = ggplot2::element_text(size = input$v_y_lab_size),
+                axis.text.x = ggplot2::element_text(
+                  size = input$v_x_text_size,
+                  angle = input$v_angle,
+                  hjust = 0.5, vjust = 0.5
+                ),
+                axis.text.y = ggplot2::element_text(size = input$v_y_text_size),
+                plot.title = ggplot2::element_text(size = input$v_title_size, hjust = 0.5),
+                legend.position = "none"
+              )
+          )
+        }
+        
+        dev.off()
+        
         pdf(pdf_file,
-            width = input$v_width,
+            width = if (has_split) input$v_width * n_splits else input$v_width,
             height = input$v_height)
         
-        print(
-          VlnPlot(
-            rv$data_obj,
-            features = genes,
-            group.by = rv$visualization_sample_column,
-            pt.size = if (input$v_show_points) 0.5 else 0
-          ) +
-            ggplot2::labs(
-              title = genes,
-              x = rv$visualization_sample_column,
-              y = "Expression"
+        if (has_split) {
+          plot_list <- lapply(seq_along(split_data_list), function(j) {
+            subset_obj <- split_data_list[[j]]
+            split_val <- split_vals[j]
+            
+            x_labels <- names(table(subset_obj@meta.data[[rv$visualization_sample_column]]))
+            
+            if (input$v_show_non_zero) {
+              percentages <- get_non_zero_percentage(
+                subset_obj, 
+                genes, 
+                rv$visualization_sample_column
+              )
+              
+              if (!is.null(percentages)) {
+                x_labels <- sapply(x_labels, function(label) {
+                  pct <- percentages[label]
+                  if (!is.na(pct)) {
+                    paste0(label, "\n(", sprintf("%.1f", pct), "%)")
+                  } else {
+                    label
+                  }
+                })
+              }
+            }
+            
+            VlnPlot(
+              subset_obj,
+              features = genes,
+              group.by = rv$visualization_sample_column,
+              pt.size = if (input$v_show_points) 0.5 else 0
             ) +
-            ggplot2::theme(
-              axis.title.x = ggplot2::element_text(size = input$v_x_lab_size),
-              axis.title.y = ggplot2::element_text(size = input$v_y_lab_size),
-              axis.text.x = ggplot2::element_text(
-                size = input$v_x_text_size,
-                angle = input$v_angle, 
-                hjust = 0.5, vjust = 0.5
-              ),
-              axis.text.y = ggplot2::element_text(
-                size = input$v_y_text_size
-              ),
-              plot.title = ggplot2::element_text(
-                size = input$v_title_size,
-                hjust = 0.5
-              ),
-              legend.position = "none"
+              ggplot2::scale_x_discrete(labels = x_labels) +
+              ggplot2::labs(
+                title = paste0(genes, " (", split_val, ")"),
+                x = rv$visualization_sample_column,
+                y = "Expression"
+              ) +
+              ggplot2::theme(
+                axis.title.x = ggplot2::element_text(size = input$v_x_lab_size),
+                axis.title.y = ggplot2::element_text(size = input$v_y_lab_size),
+                axis.text.x = ggplot2::element_text(
+                  size = input$v_x_text_size,
+                  angle = input$v_angle,
+                  hjust = 0.5, vjust = 0.5
+                ),
+                axis.text.y = ggplot2::element_text(size = input$v_y_text_size),
+                plot.title = ggplot2::element_text(size = input$v_title_size, hjust = 0.5),
+                legend.position = "none"
+              )
+          })
+          
+          print(patchwork::wrap_plots(plot_list, ncol = n_splits))
+          
+        } else {
+          x_labels <- names(table(rv$data_obj@meta.data[[rv$visualization_sample_column]]))
+          
+          if (input$v_show_non_zero) {
+            percentages <- get_non_zero_percentage(
+              rv$data_obj, 
+              genes, 
+              rv$visualization_sample_column
             )
-        )
-        
+            
+            if (!is.null(percentages)) {
+              x_labels <- sapply(x_labels, function(label) {
+                pct <- percentages[label]
+                if (!is.na(pct)) {
+                  paste0(label, "\n(", sprintf("%.1f", pct), "%)")
+                } else {
+                  label
+                }
+              })
+            }
+          }
+          
+          print(
+            VlnPlot(
+              rv$data_obj,
+              features = genes,
+              group.by = rv$visualization_sample_column,
+              pt.size = if (input$v_show_points) 0.5 else 0
+            ) +
+              ggplot2::scale_x_discrete(labels = x_labels) +
+              ggplot2::labs(
+                title = genes,
+                x = rv$visualization_sample_column,
+                y = "Expression"
+              ) +
+              ggplot2::theme(
+                axis.title.x = ggplot2::element_text(size = input$v_x_lab_size),
+                axis.title.y = ggplot2::element_text(size = input$v_y_lab_size),
+                axis.text.x = ggplot2::element_text(
+                  size = input$v_x_text_size,
+                  angle = input$v_angle,
+                  hjust = 0.5, vjust = 0.5
+                ),
+                axis.text.y = ggplot2::element_text(size = input$v_y_text_size),
+                plot.title = ggplot2::element_text(size = input$v_title_size, hjust = 0.5),
+                legend.position = "none"
+              )
+          )
+        }
         dev.off()
         
         png_files <- c(png_files, png_file)
@@ -3975,22 +5159,26 @@ server <- function(input, output, session) {
     
     rv$violin_files <- generated_files
     
-    # Step 2: Combine PNG files into single multi-page PDF
     tryCatch({
       shinyjs::html(
         "violin_progress_detail",
         "<b>Combined file</b><br>Creating multi-page PDF..."
       )
       
-      combined_output <- file.path(out_dir, "combined_violin_plots.pdf")
+      combined_output <- file.path(
+        out_dir,
+        paste0("combined_violin_plots_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".pdf")
+      )
       
       combine_pngs_to_pdf_violin(
         png_files = png_files,
         output_path = combined_output,
-        genes_per_page = 8,
+        has_split = has_split,
+        n_splits = n_splits,
+        genes_per_page = if (has_split) 4 else 8,
         genes_per_row = 2,
-        final_width = input$v_width * 2 + 0.5,  # Wider page for 2 columns
-        final_height = input$v_height * 4 + 1,   # Taller page for 4 rows
+        final_width = 8.5,
+        final_height = if (has_split) 8.5 else 11,
         update_progress_fn = function(msg) {
           shinyjs::html("violin_progress_detail", paste0("<b>Combined file</b><br>", msg))
         }
@@ -3998,20 +5186,15 @@ server <- function(input, output, session) {
       
       rv$violin_files <- c(rv$violin_files, combined_output)
       
-      # Step 3: Clean up temporary PNG files
-      shinyjs::html(
-        "violin_progress_detail",
-        "<b>Combined file</b><br>Cleaning up temporary files..."
-      )
-      
       unlink(png_dir, recursive = TRUE)
-      
       removeModal()
       
       showNotification(
-        paste("All violin plots generated and combined!",
-              "\nIndividual PDFs: ", out_dir,
-              "\nCombined PDF: combined_violin_plots.pdf"),
+        paste0(
+          "All violin plots generated and combined!",
+          "\nSplit groups: ", n_splits,
+          "\nOutput directory: ", out_dir
+        ),
         type = "message",
         duration = 10
       )
@@ -4036,13 +5219,11 @@ server <- function(input, output, session) {
       files <- rv$violin_files
       
       if (is.null(files) || length(files) == 0) {
-        
         showNotification(
           "No violin plots generated yet.",
           type = "error",
           duration = 5
         )
-        
         return(NULL)
       }
       
@@ -4070,7 +5251,13 @@ server <- function(input, output, session) {
     req(rv$data_obj)
     req(rv$visualization_sample_column)
     rv$ui_freeze = TRUE
-    groups <- unique(rv$data_obj@meta.data[[rv$visualization_sample_column]])
+    sample_group <- rv$data_obj@meta.data[[rv$visualization_sample_column]]
+    
+    groups <- unique(as.character(sample_group))
+    
+    if (is.factor(sample_group)) {
+      groups <- levels(sample_group)
+    }
     
     if (!is.null(rv$gene_grouping)) {
       colors <- sapply(seq_along(groups), function(i) {
@@ -4103,7 +5290,6 @@ server <- function(input, output, session) {
     })
     
     gene_pool <- setdiff(all_genes, assigned_genes)
-    gene_pool <- sort(gene_pool)
     showModal(modalDialog(
       title = "Gene Grouping & Color Setting",
       size = "l",
@@ -4213,7 +5399,7 @@ server <- function(input, output, session) {
     showNotification("Gene grouping saved!", type = "message")
   })
   
-  stack_violin_plot <- reactive({
+  stack_violin_data <- reactive({
     
     req(rv$data_obj)
     req(rv$visualization_marker)
@@ -4238,7 +5424,17 @@ server <- function(input, output, session) {
     
     expr <- as.data.frame(t(expr))
     
-    expr$cluster <- rv$data_obj@meta.data[[rv$visualization_sample_column]]
+    cluster_vec <- rv$data_obj@meta.data[[rv$visualization_sample_column]]
+    
+    if (is.factor(cluster_vec)) {
+      cluster_levels <- levels(cluster_vec)
+      cluster_vec <- factor(cluster_vec, levels = cluster_levels)
+    } else {
+      cluster_levels <- sort(unique(cluster_vec))
+      cluster_vec <- factor(cluster_vec, levels = cluster_levels)
+    }
+    
+    expr$cluster <- cluster_vec
     
     df <- expr %>%
       tibble::as_tibble() %>%
@@ -4274,19 +5470,39 @@ server <- function(input, output, session) {
     }))
     
     group_map <- group_map[!is.na(group_map$gene), ]
+    group_levels <- unique(sapply(rv$gene_grouping, function(g) as.character(g$group)))
+    group_map$group <- factor(as.character(group_map$group), levels = rev(group_levels))
     
     df <- dplyr::left_join(df, group_map, by = c("Feat" = "gene"))
     
     df$group[is.na(df$group)] <- "Unknown"
     df$color[is.na(df$color)] <- "#cccccc"
     df$Feat <- factor(df$Feat, levels = genes)
-    df$cluster <- factor(df$cluster)
-    group_levels <- unique(group_map$group)
-    df$group <- factor(df$group, levels = group_levels)
-    df_com <- group_map
+    df$cluster <- factor(df$cluster, levels = cluster_levels)
+    group_levels <- unique(sapply(rv$gene_grouping, function(g) g$group))
     
-    df_com$group <- factor(df_com$group, levels = group_levels)
-    df_com$gene <- factor(df_com$gene, levels = unique(df_com$gene))
+    gene_levels <- unique(unlist(lapply(rv$gene_grouping, function(g) {
+      g$genes
+    })))
+    
+    gene_levels <- trimws(gene_levels)
+    gene_levels <- gene_levels[gene_levels != "" & !is.na(gene_levels)]
+    gene_levels <- gene_levels[gene_levels %in% genes]
+    
+    df_com <- group_map
+    df_com$group <- factor(df_com$group, levels = rev(levels(group_levels)))
+    
+    df_com$gene <- factor(df_com$gene, levels = gene_levels)
+    df_com <- df_com[order(df_com$group, decreasing = TRUE), ]
+    df_com$gene <- factor(df_com$gene, levels = df_com$gene)
+    return(list(df = df,
+           df_com = df_com))
+  })
+    
+  stack_violin_plot <- reactive({
+      req(stack_violin_data())
+    df <- stack_violin_data()$df
+    df_com <- stack_violin_data()$df_com
     right <- ggplot(df, aes(factor(cluster), Expr, fill = Feat)) + 
       geom_violin(scale = "width", adjust = 1, trim = TRUE) +
       scale_y_continuous(expand = c(0, 0), position="right", labels = function(x)
@@ -4307,7 +5523,6 @@ server <- function(input, output, session) {
             axis.title.x =  element_blank(),
             plot.margin = margin(0, 0, 0, 0, "pt"))  + 
       xlab(NULL) + ylab("Expression Level")
-    
     left <- ggplot(df_com, aes(x = 1, y = gene, fill = group, label = group)) + geom_tile(NULL) +
       geom_text(fontface = "bold", size = input$stack_violin_y_left_sample_size) + # y left sample id size
       theme_bw(base_size = 12) + 
@@ -4379,50 +5594,143 @@ server <- function(input, output, session) {
     }
   )
   # ----------------- VISUALIZATION FUNCTION Dot Plot -----------------
+
   dotplot_plot_reactive <- reactive({
     
-    req(rv$data_obj)
-    req(rv$visualization_marker)
-    req(rv$visualization_sample_column)
-    req(!rv$ui_freeze)
+    data_prep <- visualization_data_prepared()
+    
+    req(data_prep)
     
     genes <- unique(trimws(unlist(strsplit(rv$visualization_marker, "\n"))))
     genes <- genes[genes != ""]
-    
     genes <- genes[genes %in% rownames(rv$data_obj)]
     
-    validate(
-      need(length(genes) > 0, "No valid genes found.")
-    )
+    validate(need(length(genes) > 0, "No valid genes found."))
     
-    p <- suppressWarnings(Seurat::DotPlot(
-      object = rv$data_obj,
-      features = genes,
-      group.by = rv$visualization_sample_column,
-      dot.scale = input$dotplot_dot_max_size,
-      scale = input$dotplot_scale,
-    ) +
-      theme(
-        axis.text.x = element_text(
-          angle = input$dotplot_x_rotate,
-          hjust = 1,
-          size = input$dotplot_x_text_size
-        ),
-        axis.text.y = element_text(
-          size = input$dotplot_y_text_size
-        ),
-        legend.position = input$dotplot_legend_position,
-        legend.text = element_text(size = input$dotplot_legend_text_size),
-        legend.title = element_text(size = input$dotplot_legend_title_size),
-        legend.key.size = unit(input$dotplot_legend_key_size, "cm")
+    # Check if split is enabled
+    if (data_prep$has_split) {
+      # Calculate global min/max for both percent.exp and avg.exp
+      expr_stats <- lapply(data_prep$split_data, function(subset_obj) {
+        # Get DotPlot data
+        dot_data <- Seurat::DotPlot(
+          object = subset_obj,
+          features = genes,
+          group.by = rv$visualization_sample_column,
+          scale = input$dotplot_scale
+        )$data
+        
+        list(
+          pct_min = min(dot_data$pct.exp, na.rm = TRUE),
+          pct_max = max(dot_data$pct.exp, na.rm = TRUE),
+          avg_min = min(dot_data$avg.exp.scaled, na.rm = TRUE),
+          avg_max = max(dot_data$avg.exp.scaled, na.rm = TRUE)
+        )
+      })
+      
+      global_pct_min <- min(sapply(expr_stats, function(x) x$pct_min))
+      global_pct_max <- max(sapply(expr_stats, function(x) x$pct_max))
+      global_avg_min <- min(sapply(expr_stats, function(x) x$avg_min))
+      global_avg_max <- max(sapply(expr_stats, function(x) x$avg_max))
+      
+      # Create dotplot for each split
+      plot_list <- lapply(seq_along(data_prep$split_data), function(i) {
+        subset_obj <- data_prep$split_data[[i]]
+        split_val <- data_prep$split_vals[i]
+        
+        p <- suppressWarnings(Seurat::DotPlot(
+          object = subset_obj,
+          features = genes,
+          group.by = rv$visualization_sample_column,
+          dot.scale = input$dotplot_dot_max_size,
+          scale = input$dotplot_scale
+        ))
+        
+        # Apply global scale limits
+        p <- p +
+          ggplot2::scale_color_gradient(
+            low = "lightgrey", 
+            high = "blue",
+            limits = c(global_avg_min, global_avg_max)
+          ) +
+          ggplot2::scale_size_continuous(
+            limits = c(global_pct_min, global_pct_max)
+          ) +
+          labs(title = split_val) +
+          theme(
+            axis.text.x = element_text(
+              angle = input$dotplot_x_rotate,
+              hjust = 1,
+              size = input$dotplot_x_text_size
+            ),
+            axis.text.y = element_text(
+              size = input$dotplot_y_text_size
+            ),
+            legend.position = "none",
+            plot.title = element_text(hjust = 0.5, face = "bold")
+          ) +
+          labs(
+            x = NULL,
+            y = NULL
+          )
+        
+        p
+      })
+      
+      # Combine plots with shared legend
+      combined_plot <- patchwork::wrap_plots(plot_list, ncol = length(data_prep$split_vals)) &
+        theme(
+          legend.position = input$dotplot_legend_position,
+          legend.text = element_text(size = input$dotplot_legend_text_size),
+          legend.title = element_text(size = input$dotplot_legend_title_size),
+          legend.key.size = unit(input$dotplot_legend_key_size, "cm")
+        ) &
+        patchwork::plot_layout(guides = "collect")
+      
+      combined_plot
+      
+    } else {
+      suppressWarnings(Seurat::DotPlot(
+        object = data_prep$data,
+        features = genes,
+        group.by = rv$visualization_sample_column,
+        dot.scale = input$dotplot_dot_max_size,
+        scale = input$dotplot_scale
       ) +
-      labs(
-        x = NULL,
-        y = NULL,
-        title = NULL
-      ))
+        theme(
+          axis.text.x = element_text(
+            angle = input$dotplot_x_rotate,
+            hjust = 1,
+            size = input$dotplot_x_text_size
+          ),
+          axis.text.y = element_text(
+            size = input$dotplot_y_text_size
+          ),
+          legend.position = input$dotplot_legend_position,
+          legend.text = element_text(size = input$dotplot_legend_text_size),
+          legend.title = element_text(size = input$dotplot_legend_title_size),
+          legend.key.size = unit(input$dotplot_legend_key_size, "cm")
+        ) +
+        labs(
+          x = NULL,
+          y = NULL,
+          title = NULL
+        ))
+    }
+  })
+  
+  output$dotplot_plot_ui <- renderUI({
     
-    p
+    if (!is.null(rv$visualization_split_column) && rv$visualization_split_column != "") {
+      n_splits <- length(unique(rv$data_obj@meta.data[[rv$visualization_split_column]]))
+      width_val <- paste0(n_splits * 480, "px")  
+    } else {
+      width_val <- "480px"
+    }
+    
+    div(
+      style = "max-width: 800px; overflow-x: auto; width: 100%;",
+      plotOutput("dotplot_plot", height = "288px", width = width_val)
+    )
   })
   
   output$dotplot_plot <- renderPlot({
@@ -4436,6 +5744,18 @@ server <- function(input, output, session) {
     req(dotplot_plot_reactive())
     req(input$dotplot_save_path)
     
+    data_prep <- visualization_data_prepared()
+    
+    # Check if split is enabled
+    has_split <- data_prep$has_split
+    
+    if (has_split) {
+      n_splits <- length(data_prep$split_vals)
+      pdf_width <- input$dotplot_width * n_splits
+    } else {
+      pdf_width <- input$dotplot_width
+    }
+    
     out_dir <- input$dotplot_save_path
     if (!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE)
     
@@ -4443,14 +5763,14 @@ server <- function(input, output, session) {
                           paste0("dotplot_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".pdf"))
     
     pdf(out_file,
-        width = input$dotplot_width,
+        width = pdf_width,
         height = input$dotplot_height)
     
     print(dotplot_plot_reactive())
     
     dev.off()
     
-    showNotification("Saved volcano plot", type = "message")
+    showNotification("Saved dotplot", type = "message")
   })
   
   output$download_dotplot <- downloadHandler(
@@ -4463,8 +5783,20 @@ server <- function(input, output, session) {
       
       req(dotplot_plot_reactive())
       
+      data_prep <- visualization_data_prepared()
+      
+      # Check if split is enabled
+      has_split <- data_prep$has_split
+      
+      if (has_split) {
+        n_splits <- length(data_prep$split_vals)
+        pdf_width <- input$dotplot_width * n_splits
+      } else {
+        pdf_width <- input$dotplot_width
+      }
+      
       pdf(file,
-          width = input$dotplot_width,
+          width = pdf_width,
           height = input$dotplot_height)
       
       print(dotplot_plot_reactive())
@@ -4569,7 +5901,7 @@ server <- function(input, output, session) {
                        legend.text.size = input$feature_plot_legend_text_size,
                        axis.title.size = input$feature_plot_axis_title_size,
                        axis.text.size = input$feature_plot_text_size)
-    })
+  })
   
   # Helper function to generate feature plots directly as PNG
   generate_feature_plot_png <- function(seurat_obj, gene, output_file,
@@ -4606,10 +5938,10 @@ server <- function(input, output, session) {
   
   # Helper function to combine PNGs into multi-page PDF
   combine_pngs_to_pdf_feature <- function(png_files, output_path, 
-                                  genes_per_page = 4,
-                                  final_width = 8.5,
-                                  final_height = 11,
-                                  update_progress_fn = NULL) {
+                                          genes_per_page = 4,
+                                          final_width = 8.5,
+                                          final_height = 11,
+                                          update_progress_fn = NULL) {
     
     library(magick)
     
@@ -4831,7 +6163,7 @@ server <- function(input, output, session) {
         "<b>Combined file</b><br>Creating multi-page PDF..."
       )
       
-      combined_output <- file.path(out_dir, "combined_feature_plots.pdf")
+      combined_output <- file.path(out_dir, paste0("combined_feature_plots_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".pdf"))
       
       combine_pngs_to_pdf_feature(
         png_files = png_files,
@@ -4911,7 +6243,6 @@ server <- function(input, output, session) {
       )
     }
   )
-  
   # ----------------- VISUALIZATION FUNCTION Original Volcano Plot -----------------
   
   volcano_plot_reactive <- reactive({
@@ -5689,7 +7020,6 @@ server <- function(input, output, session) {
   )
   
   # ----------------- VISUALIZATION FUNCTION NES Bar Plot -----------------
-  
   nes_barplot_reactive <- reactive({
 
     req(rv$gsea_obj)
@@ -5851,6 +7181,407 @@ server <- function(input, output, session) {
       )
     }
   )
+  # ----------------- VISUALIZATION FUNCTION Cell Cell Communication netVisual_circle_plot-----------------
+  netVisual_circle_reactive <- reactive({
+    
+    req(rv$cccd_obj)
+    req(input$circle_measure)
+    req(!rv$ui_freeze)
+    
+    cellchat_obj <- rv$cccd_obj$data
+    cellchat_merge <- rv$cccd_obj$data_merge
+    
+    plot_circle_mat <- function(mat, title_name = NULL) {
+      
+      if (is.null(mat)) {
+        plot.new()
+        text(0.5, 0.5, "Selected network measure is not available.", col = "red", cex = 1.2)
+        return(invisible(NULL))
+      }
+      
+      if (nrow(mat) == 0 || ncol(mat) == 0) {
+        plot.new()
+        text(0.5, 0.5, "Network matrix is empty.", col = "red", cex = 1.2)
+        return(invisible(NULL))
+      }
+      
+      if (isTRUE(input$circle_remove_isolate)) {
+        keep <- rowSums(mat) + colSums(mat) > 0
+        mat <- mat[keep, keep, drop = FALSE]
+      }
+      
+      g <- igraph::graph_from_adjacency_matrix(
+        mat,
+        mode = "directed",
+        weighted = TRUE,
+        diag = TRUE
+      )
+      
+      n <- nrow(mat)
+      theta <- seq(0, 2 * pi, length.out = n + 1)[1:n]
+      layout_circle <- cbind(cos(theta), sin(theta))
+      rownames(layout_circle) <- rownames(mat)
+      
+      vertex_colors <- tryCatch(
+        CellChat::scPalette(n),
+        error = function(e) grDevices::rainbow(n)
+      )
+      names(vertex_colors) <- rownames(mat)
+      
+      edge_ends <- igraph::ends(g, igraph::E(g), names = TRUE)
+      edge_from <- edge_ends[, 1]
+      edge_to <- edge_ends[, 2]
+      
+      edge_weights <- igraph::E(g)$weight
+      edge_width <- edge_weights / max(edge_weights, na.rm = TRUE) * input$circle_edge_width_max
+      
+      edge_colors <- grDevices::adjustcolor(
+        vertex_colors[edge_from],
+        alpha.f = 0.6
+      )
+      
+      loop_angles <- rep(0, igraph::ecount(g))
+      
+      for (i in seq_len(igraph::ecount(g))) {
+        if (edge_from[i] == edge_to[i]) {
+          vertex_index <- match(edge_from[i], rownames(mat))
+          loop_angles[i] <- theta[vertex_index]
+        }
+      }
+      
+      measure_title <- if (input$circle_measure == "count") {
+        "Interaction Count"
+      } else {
+        "Interaction Weight"
+      }
+      
+      final_title <- if (is.null(title_name)) {
+        measure_title
+      } else {
+        paste0(title_name, " - ", measure_title)
+      }
+      
+      plot(
+        g,
+        layout = layout_circle,
+        vertex.label = NA,
+        vertex.size = input$circle_vertex_size,
+        vertex.color = vertex_colors,
+        vertex.frame.color = NA,
+        edge.width = edge_width,
+        edge.color = edge_colors,
+        edge.arrow.size = input$circle_arrow_size,
+        edge.curved = 0.25,
+        edge.label = if (isTRUE(input$circle_show_edge_label)) round(edge_weights, 2) else NA,
+        loop.angle = loop_angles,
+        loop.size = 1.2,
+        main = "",
+        margin = 0.2
+      )
+      
+      label_radius <- 1.15
+      label_adj <- ifelse(cos(theta) >= 0, 0, 1)
+      
+      text(
+        x = cos(theta) * label_radius,
+        y = sin(theta) * label_radius,
+        labels = rownames(mat),
+        cex = input$circle_vertex_label_size,
+        col = "black",
+        font = 1,
+        family = "sans",
+        adj = label_adj
+      )
+      
+      title(main = final_title, cex.main = input$circle_title_size)
+    }
+    
+    if (!is.null(cellchat_merge)) {
+      
+      dataset_names <- names(cellchat_merge@net)
+      
+      if (length(dataset_names) < 2) {
+        return(list(
+          type = "message",
+          content = "Merged CellChat object should contain at least two datasets."
+        ))
+      }
+      
+      plot_fun <- function() {
+        par(mfrow = c(1, min(2, length(dataset_names))), xpd = TRUE)
+        
+        for (dataset_name in dataset_names[1:min(2, length(dataset_names))]) {
+          mat <- cellchat_merge@net[[dataset_name]][[input$circle_measure]]
+          plot_circle_mat(mat, title_name = dataset_name)
+        }
+        
+        invisible(NULL)
+      }
+      
+    } else {
+      
+      plot_fun <- function() {
+        par(mfrow = c(1, 1), xpd = TRUE)
+        mat <- cellchat_obj@net[[input$circle_measure]]
+        plot_circle_mat(mat, title_name = "CellChat Network")
+        invisible(NULL)
+      }
+    }
+    
+    return(list(
+      type = "plot",
+      plot_fun = plot_fun
+    ))
+  })
+  
+  output$netVisual_circle_plot_ui <- renderPlot({
+    
+    req(netVisual_circle_reactive())
+    req(!rv$ui_freeze)
+    
+    res <- netVisual_circle_reactive()
+    
+    if (is.list(res) && res$type == "message") {
+      plot.new()
+      text(0.5, 0.5, res$content, cex = 1.2, col = "red")
+      return()
+    }
+    
+    res$plot_fun()
+  })
+  
+  observeEvent(input$circle_barplot, {
+    
+    req(netVisual_circle_reactive())
+    req(input$circle_save_path)
+    
+    res <- netVisual_circle_reactive()
+    
+    if (is.list(res) && res$type == "message") {
+      showNotification(res$content, type = "error")
+      return()
+    }
+    
+    out_dir <- input$circle_save_path
+    if (!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE)
+    
+    out_file <- file.path(
+      out_dir,
+      paste0("CommunicationNetwork_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".pdf")
+    )
+    
+    pdf(
+      out_file,
+      width = input$circle_width,
+      height = input$circle_height
+    )
+    
+    res$plot_fun()
+    
+    dev.off()
+    
+    showNotification(
+      paste0("Saved CellChat circle plot: ", out_file),
+      type = "message"
+    )
+  })
+  
+  output$download_circle <- downloadHandler(
+    
+    filename = function() {
+      paste0("CommunicationNetwork_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".pdf")
+    },
+    
+    content = function(file) {
+      
+      req(netVisual_circle_reactive())
+      
+      res <- netVisual_circle_reactive()
+      
+      pdf(
+        file,
+        width = input$circle_width,
+        height = input$circle_height
+      )
+      
+      if (is.list(res) && res$type == "message") {
+        plot.new()
+        text(0.5, 0.5, res$content, cex = 1.2, col = "red")
+      } else {
+        res$plot_fun()
+      }
+      
+      dev.off()
+      
+      showNotification(
+        "CellChat circle plot downloaded successfully.",
+        type = "message",
+        duration = 3
+      )
+    }
+  )
+  # ----------------- VISUALIZATION FUNCTION Cell Cell Communication netAnalysis_signalingRole_scatter-----------------
+  netAnalysis_signalingRole_scatter_reactive <- reactive({
+    
+    req(rv$cccd_obj)
+    req(!rv$ui_freeze)
+    
+    cellchat_obj <- rv$cccd_obj$data
+    cellchat_merge <- rv$cccd_obj$data_merge
+    
+    make_role_scatter <- function(obj, title_name = NULL, weight.MinMax = NULL) {
+      
+      p <- netAnalysis_signalingRole_scatter(
+        obj,
+        title = title_name,
+        weight.MinMax = weight.MinMax,
+        label.size = input$role_scatter_label_size,
+        dot.size = input$role_scatter_point_size
+      )
+      
+      p <- p +
+        ggplot2::theme(
+          plot.title = ggplot2::element_text(
+            size = input$role_scatter_title_size,
+            face = "bold",
+            hjust = 0.5
+          ),
+          axis.text = ggplot2::element_text(size = input$role_scatter_axis_text_size),
+          axis.title = ggplot2::element_text(size = input$role_scatter_axis_title_size, face = "bold"),
+          legend.text = ggplot2::element_text(size = input$role_scatter_legend_text_size),
+          legend.title = ggplot2::element_text(size = input$role_scatter_legend_title_size),
+          legend.position = input$role_scatter_legend_position
+        )
+      
+      return(p)
+    }
+    
+    if (!is.null(cellchat_merge)) {
+      
+      object.list <- cellchat_obj
+      
+      if (!is.list(object.list) || length(object.list) < 2) {
+        return(list(
+          type = "message",
+          content = "The uploaded file has a merged CellChat object, but the original object list is not available."
+        ))
+      }
+      
+      num.link <- sapply(object.list, function(x) {
+        rowSums(x@net$count) + colSums(x@net$count) - diag(x@net$count)
+      })
+      
+      weight.MinMax <- c(
+        min(num.link, na.rm = TRUE),
+        max(num.link, na.rm = TRUE)
+      )
+      
+      gg <- list()
+      
+      for (i in seq_along(object.list)) {
+        gg[[i]] <- make_role_scatter(
+          obj = object.list[[i]],
+          title_name = names(object.list)[i],
+          weight.MinMax = weight.MinMax
+        )
+      }
+      
+      p <- patchwork::wrap_plots(plots = gg, nrow = 1)
+      
+    } else {
+      
+      p <- make_role_scatter(
+        obj = cellchat_obj,
+        title_name = "CellChat Signaling Roles",
+        weight.MinMax = NULL
+      )
+    }
+    
+    return(p)
+  })
+  
+  output$netAnalysis_signalingRole_scatter_plot <- renderPlot({
+    
+    req(netAnalysis_signalingRole_scatter_reactive())
+    req(!rv$ui_freeze)
+    
+    res <- netAnalysis_signalingRole_scatter_reactive()
+    
+    if (is.list(res) && !inherits(res, "ggplot") && res$type == "message") {
+      plot.new()
+      text(0.5, 0.5, res$content, cex = 1.2, col = "red")
+      return()
+    }
+    
+    print(res)
+  })
+  
+  observeEvent(input$save_role_scatter, {
+    
+    req(netAnalysis_signalingRole_scatter_reactive())
+    req(input$role_scatter_save_path)
+    
+    res <- netAnalysis_signalingRole_scatter_reactive()
+    
+    if (is.list(res) && !inherits(res, "ggplot") && res$type == "message") {
+      showNotification(res$content, type = "error")
+      return()
+    }
+    
+    out_dir <- input$role_scatter_save_path
+    if (!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE)
+    
+    out_file <- file.path(
+      out_dir,
+      paste0("SendervsReceiverRoles", format(Sys.time(), "%Y%m%d_%H%M%S"), ".pdf")
+    )
+    
+    ggplot2::ggsave(
+      filename = out_file,
+      plot = res,
+      width = input$role_scatter_width,
+      height = input$role_scatter_height
+    )
+    
+    showNotification(
+      paste0("Saved signaling role scatter: ", out_file),
+      type = "message"
+    )
+  })
+  
+  output$download_role_scatter <- downloadHandler(
+    
+    filename = function() {
+      paste0("SendervsReceiverRoles", format(Sys.time(), "%Y%m%d_%H%M%S"), ".pdf")
+    },
+    
+    content = function(file) {
+      
+      req(netAnalysis_signalingRole_scatter_reactive())
+      
+      res <- netAnalysis_signalingRole_scatter_reactive()
+      
+      if (is.list(res) && !inherits(res, "ggplot") && res$type == "message") {
+        pdf(file, width = input$role_scatter_width, height = input$role_scatter_height)
+        plot.new()
+        text(0.5, 0.5, res$content, cex = 1.2, col = "red")
+        dev.off()
+      } else {
+        ggplot2::ggsave(
+          filename = file,
+          plot = res,
+          width = input$role_scatter_width,
+          height = input$role_scatter_height
+        )
+      }
+      
+      showNotification(
+        "Signaling role scatter downloaded successfully.",
+        type = "message",
+        duration = 3
+      )
+    }
+  )
   
 
   # ----------------- Data Output Gene expression -----------------
@@ -5868,10 +7599,14 @@ server <- function(input, output, session) {
     } else {
       meta_cols <- colnames(rv$data_obj@meta.data)
       
+      meta_df <- rv$data_obj@meta.data
       valid_cols <- meta_cols[
-        sapply(rv$data_obj@meta.data[, meta_cols, drop = FALSE], function(x) !is.numeric(x))
+        sapply(meta_df[, meta_cols, drop = FALSE], function(x) {
+          !is.numeric(x)
+        })
       ]
-      valid_cols <- c("", valid_cols)
+      
+      valid_cols <- c("", setdiff(valid_cols, c("CB", "CB_original")))
       tagList(
         fluidRow(
           column(6, selectInput("gene_expression_first_meta", "First layer meta.data field", choices = valid_cols, width = "100%")),
