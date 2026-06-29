@@ -1611,7 +1611,7 @@ server <- function(input, output, session) {
     path_input_ui(
       id = "cccd",
       label = "Cell Cell Communication File Path (.rds)",
-      placeholder = "/path/to/cellchat_object_list.rds or /path/to/cellchat_object.rds",
+      placeholder = "/path/to/cellchat_compare.rds or /path/to/cellchat_object.rds",
       value = rv$cccd_obj_path),
     br(),
     uiOutput("cccv_control_ui")
@@ -1625,7 +1625,7 @@ server <- function(input, output, session) {
       path_input_ui(
         id = "cccd",
         label = "Cell Cell Communication File Path (.rds), must be included control and treatment information",
-        placeholder = "/path/to/cellchat_object_list.rds",
+        placeholder = "/path/to/cellchat_compare.rds",
         value = rv$cccd_obj_path),
       br(),
       uiOutput("cccv_condition_control_ui")
@@ -2197,7 +2197,7 @@ server <- function(input, output, session) {
     if (is.null(rv$cccd_obj) | is.null(rv$cccd_obj$data_merge)){
       div(
         style = "padding: 15px; background-color: #fff3cd; border: 1px solid #ffeeba; border-radius: 5px;",
-        "Please upload the cell cell communication result from `Cell-Cell Communication Analysis` tab. Also make sure the upload file includes control treatment information (cellchat_object_list.rds)"
+        "Please upload the cell cell communication result from `Cell-Cell Communication Analysis` tab. Also make sure the upload file includes control treatment information (cellchat_compare.rds)"
       )
       
     } else {
@@ -2627,6 +2627,71 @@ server <- function(input, output, session) {
     )
   })
   
+  output$netAnalysis_signalingRole_network_ui <- renderUI({
+    
+    tagList(
+      
+      div(
+        style = "display: flex; justify-content: center;",
+        uiOutput("netAnalysis_signalingRole_network_control")
+      ),
+      
+      fluidRow(
+        column(3,
+          selectInput(
+            "netAnalysis_signalingRole_network_color",
+            "Heatmap color",
+            choices = c(
+              "Reds" = "Reds",
+              "Blues" = "Blues",
+              "Greens" = "Greens",
+              "Purples" = "Purples",
+              "Oranges" = "Oranges",
+              "BuGn" = "BuGn"
+            ),
+            selected = "BuGn"
+          )
+        ),
+        column(3, numericInput("netAnalysis_signalingRole_network_font_size", "Font size", value = 12)),
+        column(3, numericInput("netAnalysis_signalingRole_network_title_size", "Title size", value = 12))
+      ),
+      fluidRow(
+        column(3, numericInput("netAnalysis_signalingRole_network_width", "PDF width (inch)", value = if (is.null(rv$cccd_obj$data_merge)) {8} else {16})),
+        column(3, numericInput("netAnalysis_signalingRole_network_height", "PDF height (inch)", value = 4))
+      ),
+      
+      fluidRow(
+        column(
+          12,
+          textInput(
+            "netAnalysis_signalingRole_network_save_path",
+            "Output directory",
+            value = file.path(rv$save_path, "CellCellCommunication"),
+            width = "100%"
+          )
+        )
+      ),
+      
+      fluidRow(
+        column(
+          6,
+          actionButton(
+            "save_netAnalysis_signalingRole_network",
+            "Save Graph on SCC",
+            style = "background-color: #87cefa; color: white; width: 100%;"
+          )
+        ),
+        column(
+          6,
+          downloadButton(
+            "download_netAnalysis_signalingRole_network",
+            "Download Plot to Local",
+            style = "background-color: #4CAF50; color: white; width: 100%;"
+          )
+        )
+      )
+    )
+  })
   
   
   # ----------------- Cell Cell Communication UI - LRpair-----------------
@@ -8148,7 +8213,6 @@ server <- function(input, output, session) {
   )
   
   # ----------------- VISUALIZATION FUNCTION Cell Cell Communication netAnalysis_signalingRole_heatmap -----------------
-  
   netAnalysis_signalingRole_heatmap_reactive <- reactive({
     
     req(rv$cccd_obj)
@@ -9039,7 +9103,7 @@ server <- function(input, output, session) {
       width_val <- "400px"
     }
     div(
-      style = "max-width: 600px; overflow-x: auto; width: 100%;",
+      style = "max-width: 800px; overflow-x: auto; width: 100%;",
     plotOutput(
       "netVisual_heatmap_plot",
       height = "350px",
@@ -9189,6 +9253,293 @@ server <- function(input, output, session) {
   )
   
 
+  # ----------------- VISUALIZATION FUNCTION Cell Cell Communication netAnalysis_signalingRole_network -----------------
+  # ----------------- REACTIVE Cell Cell Communication netAnalysis_signalingRole_network -----------------
+  
+  netAnalysis_signalingRole_network_reactive <- reactive({
+    
+    req(rv$cccd_obj)
+    req(rv$ccc_pathway_select)
+    req(input$netAnalysis_signalingRole_network_color)
+    req(input$netAnalysis_signalingRole_network_font_size)
+    req(input$netAnalysis_signalingRole_network_title_size)
+    req(!rv$ui_freeze)
+    
+    cellchat_obj <- rv$cccd_obj$data
+    cellchat_merge <- rv$cccd_obj$data_merge
+    signaling_use <- trimws(rv$ccc_pathway_select)
+    
+    if (is.null(signaling_use) || signaling_use == "") {
+      return(list(
+        type = "message",
+        content = "Please select and confirm a pathway first."
+      ))
+    }
+    
+    is_cellchat_obj <- function(x) {
+      methods::is(x, "CellChat")
+    }
+    
+    pathway_exists <- function(obj) {
+      if (is.null(obj)) return(FALSE)
+      if (!is_cellchat_obj(obj)) return(FALSE)
+      if (is.null(obj@netP$pathways)) return(FALSE)
+      signaling_use %in% trimws(obj@netP$pathways)
+    }
+    
+    draw_single_network <- function(obj, dataset_name = NULL) {
+      
+      if (!pathway_exists(obj)) {
+        return(NULL)
+      }
+      
+      grid::grid.grabExpr({
+        
+        grid::grid.newpage()
+        
+        netAnalysis_signalingRole_network(
+          obj,
+          signaling = signaling_use,
+          slot.name = "netP",
+          color.heatmap = input$netAnalysis_signalingRole_network_color,
+          width = if(!is.null(rv$cccd_obj$data_merge)){input$netAnalysis_signalingRole_network_width/2}else{input$netAnalysis_signalingRole_network_width},
+          height = input$netAnalysis_signalingRole_network_height-1,
+          font.size = input$netAnalysis_signalingRole_network_font_size,
+          font.size.title = input$netAnalysis_signalingRole_network_title_size
+        )
+        
+        if (!is.null(dataset_name)) {
+          grid::grid.text(
+            dataset_name,
+            x = 0.5,
+            y = 0.98,
+            gp = grid::gpar(
+              fontsize = input$netAnalysis_signalingRole_network_title_size + 2,
+              fontface = "bold"
+            )
+          )
+        }
+      })
+    }
+    
+    if (!is.null(cellchat_merge)) {
+      
+      object.list <- cellchat_obj
+      
+      if (!is.list(object.list) || length(object.list) < 2) {
+        return(list(
+          type = "message",
+          content = "The uploaded file has a merged CellChat object, but the original object list is not available."
+        ))
+      }
+      
+      object.list <- object.list[
+        sapply(object.list, is_cellchat_obj)
+      ]
+      
+      if (length(object.list) == 0) {
+        return(list(
+          type = "message",
+          content = "No valid CellChat object was found in the object list."
+        ))
+      }
+      
+      dataset_use <- names(object.list)[1:min(2, length(object.list))]
+      
+      grob_list <- lapply(dataset_use, function(dataset_name) {
+        draw_single_network(
+          obj = object.list[[dataset_name]],
+          dataset_name = dataset_name
+        )
+      })
+      
+      grob_list <- grob_list[!sapply(grob_list, is.null)]
+      
+      if (length(grob_list) == 0) {
+        pathway_info <- paste(
+          unique(unlist(lapply(object.list, function(x) x@netP$pathways))),
+          collapse = ", "
+        )
+        
+        return(list(
+          type = "message",
+          content = paste0(
+            "Pathway '", signaling_use, "' is not found in selected datasets.\n",
+            "Available pathways include: ", pathway_info
+          )
+        ))
+      }
+      
+      plot_fun <- function() {
+        combined_grob <- gridExtra::arrangeGrob(
+          grobs = grob_list,
+          nrow = 1,
+          ncol = length(grob_list)
+        )
+        
+        grid::grid.newpage()
+        grid::grid.draw(combined_grob)
+        invisible(NULL)
+      }
+      
+    } else {
+      
+      if (!pathway_exists(cellchat_obj)) {
+        pathway_info <- paste(cellchat_obj@netP$pathways, collapse = ", ")
+        
+        return(list(
+          type = "message",
+          content = paste0(
+            "Pathway '", signaling_use, "' is not found.\n",
+            "Available pathways include: ", pathway_info
+          )
+        ))
+      }
+      
+      plot_fun <- function() {
+        
+        netAnalysis_signalingRole_network(
+          cellchat_obj,
+          signaling = signaling_use,
+          slot.name = "netP",
+          color.heatmap = input$netAnalysis_signalingRole_network_color,
+          width = if(!is.null(rv$cccd_obj$data_merge)){input$netAnalysis_signalingRole_network_width/2}else{input$netAnalysis_signalingRole_network_width},
+          height = input$netAnalysis_signalingRole_network_height-1,
+          font.size = input$netAnalysis_signalingRole_network_font_size,
+          font.size.title = input$netAnalysis_signalingRole_network_title_size
+        )
+        
+        invisible(NULL)
+      }
+    }
+    
+    list(
+      type = "plot",
+      plot_fun = plot_fun
+    )
+  })
+  
+  output$netAnalysis_signalingRole_network_control <- renderUI({
+    
+    has_merge <- !is.null(rv$cccd_obj$data_merge)
+    
+    if (has_merge) {
+      width_val <- "1080px"
+    } else {
+      width_val <- "540px"
+    }
+    
+    height_val <- "300px"
+    
+    div(
+      style = "max-width: 800px; overflow-x: auto; width: 100%;",
+      plotOutput(
+        "netAnalysis_signalingRole_network_plot",
+        height = height_val,
+        width = width_val
+      )
+    )
+  })
+  output$netAnalysis_signalingRole_network_plot <- renderPlot({
+    
+    req(netAnalysis_signalingRole_network_reactive())
+    req(!rv$ui_freeze)
+    
+    res <- netAnalysis_signalingRole_network_reactive()
+    
+    if (is.list(res) && res$type == "message") {
+      plot.new()
+      text(0.5, 0.5, res$content, cex = 1.2, col = "red")
+      return()
+    }
+    
+    res$plot_fun()
+  })
+  observeEvent(input$save_netAnalysis_signalingRole_network, {
+    
+    req(netAnalysis_signalingRole_network_reactive())
+    req(input$netAnalysis_signalingRole_network_save_path)
+    
+    res <- netAnalysis_signalingRole_network_reactive()
+    
+    if (is.list(res) && res$type == "message") {
+      showNotification(res$content, type = "error")
+      return()
+    }
+    
+    out_dir <- input$netAnalysis_signalingRole_network_save_path
+    
+    if (!dir.exists(out_dir)) {
+      dir.create(out_dir, recursive = TRUE)
+    }
+    
+    out_file <- file.path(
+      out_dir,
+      paste0(
+        "PathwayRoleNetwork_",
+        rv$ccc_pathway_select,
+        "_",
+        format(Sys.time(), "%Y%m%d_%H%M%S"),
+        ".pdf"
+      )
+    )
+    
+    pdf(
+      out_file,
+      width = input$netAnalysis_signalingRole_network_width,
+      height = input$netAnalysis_signalingRole_network_height
+    )
+    
+    res$plot_fun()
+    
+    dev.off()
+    
+    showNotification(
+      paste0("Saved pathway role network: ", out_file),
+      type = "message"
+    )
+  })
+  output$download_netAnalysis_signalingRole_network <- downloadHandler(
+    
+    filename = function() {
+      paste0(
+        "PathwayRoleNetwork_",
+        rv$ccc_pathway_select,
+        "_",
+        format(Sys.time(), "%Y%m%d_%H%M%S"),
+        ".pdf"
+      )
+    },
+    
+    content = function(file) {
+      
+      req(netAnalysis_signalingRole_network_reactive())
+      
+      res <- netAnalysis_signalingRole_network_reactive()
+      
+      pdf(
+        file,
+        width = input$netAnalysis_signalingRole_network_width,
+        height = input$netAnalysis_signalingRole_network_height
+      )
+      
+      if (is.list(res) && res$type == "message") {
+        plot.new()
+        text(0.5, 0.5, res$content, cex = 1.2, col = "red")
+      } else {
+        res$plot_fun()
+      }
+      
+      dev.off()
+      
+      showNotification(
+        "Pathway role network downloaded successfully.",
+        type = "message",
+        duration = 3
+      )
+    }
+  )
+  
   # ----------------- Data Output Gene expression -----------------
   output$gene_expression_sub_ui <- renderUI({
     
