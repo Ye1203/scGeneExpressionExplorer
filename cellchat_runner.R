@@ -96,7 +96,7 @@ create_cellchat_excel <- function(cellChat_list, save_path, single_analysis = FA
       }
     }
     
-    excel_file <- file.path(save_path, "cellchat_network_tables.xlsx")
+    excel_file <- file.path(save_path, "cellchat_tables.xlsx")
     saveWorkbook(wb, excel_file, overwrite = TRUE)
     return(excel_file)
     
@@ -354,7 +354,7 @@ tryCatch({
     )
     
     cat("[CellChat Runner] Saving CellChat list\n")
-    cellchat_list_file <- file.path(SAVE_PATH, "cellchat_object_list.rds")
+    cellchat_list_file <- file.path(SAVE_PATH, "cellchat_compare.rds")
     saveRDS(cellChat_list, cellchat_list_file)
     
     cat("[CellChat Runner] Generating Excel file\n")

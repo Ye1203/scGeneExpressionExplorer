@@ -1707,7 +1707,7 @@ server <- function(input, output, session) {
         column(6,
                downloadButton(
                  "download_violin",
-                 "Download violin plots",
+                 "Download Violin Plots to Local",
                  style = "background-color: #4CAF50; color: white; width: 100%;"
                )
         )
@@ -1754,11 +1754,11 @@ server <- function(input, output, session) {
                ),
         ),
         column(6,
-               actionButton("save_stack_plot", "Save Graph",
+               actionButton("save_stack_plot", "Save Graph on SCC",
                             style = "background-color: #87cefa; color: white; width: 100%;")
         ),
         column(6,
-               downloadButton("download_stack_plot", "Download violin plot",
+               downloadButton("download_stack_plot", "Download Violin Plot to Local",
                               style = "background-color: #4CAF50; color: white; width: 100%;")
         )
       )
@@ -1814,11 +1814,11 @@ server <- function(input, output, session) {
                  ),
           ),
           column(6,
-                 actionButton("save_dotplot", "Save Graph",
+                 actionButton("save_dotplot", "Save Graph on SCC",
                               style = "background-color: #87cefa; color: white; width: 100%;")
           ),
           column(6,
-                 downloadButton("download_dotplot", "Download dot plot",
+                 downloadButton("download_dotplot", "Download Dot Plot to Local",
                                 style = "background-color: #4CAF50; color: white; width: 100%;")
           )
         )
@@ -1879,7 +1879,7 @@ server <- function(input, output, session) {
           column(6,
                  downloadButton(
                    "download_feature_plot",
-                   "Download feature plots",
+                   "Download Feature Plot to Local",
                    style = "background-color: #4CAF50; color: white; width: 100%;"
                  )
           )
@@ -1935,11 +1935,11 @@ server <- function(input, output, session) {
                  ),
           ),
           column(6,
-                 actionButton("save_original_volcano_plot", "Save Graph",
+                 actionButton("save_original_volcano_plot", "Save Graph on SCC",
                               style = "background-color: #87cefa; color: white; width: 100%;")
           ),
           column(6,
-                 downloadButton("download_original_volcano_plot", "Download volcano plot",
+                 downloadButton("download_original_volcano_plot", "Download Volcano Plot to local",
                                 style = "background-color: #4CAF50; color: white; width: 100%;")
           )
         )
@@ -2021,7 +2021,7 @@ server <- function(input, output, session) {
           6,
           actionButton(
             "save_pathway_multi_volcano",
-            "Save Graph",
+            "Save Graph on SCC",
             style = "background-color: #87cefa; color: white; width: 100%;"
           )
         ),
@@ -2029,7 +2029,7 @@ server <- function(input, output, session) {
           6,
           downloadButton(
             "download_pathway_multi_volcano",
-            "Download plot",
+            "Download Plot to Local",
             style = "background-color: #4CAF50; color: white; width: 100%;"
           )
         )
@@ -2093,7 +2093,7 @@ server <- function(input, output, session) {
           6,
           actionButton(
             "save_pathway_volcano",
-            "Save Graph",
+            "Save Graph on SCC",
             style = "background-color: #87cefa; color: white; width: 100%;"
           )
         ),
@@ -2101,7 +2101,7 @@ server <- function(input, output, session) {
           6,
           downloadButton(
             "download_pathway_volcano",
-            "Download plot",
+            "Download Plot to Local",
             style = "background-color: #4CAF50; color: white; width: 100%;"
           )
         )
@@ -2160,7 +2160,7 @@ server <- function(input, output, session) {
             6,
             actionButton(
               "save_nes_barplot",
-              "Save Graph",
+              "Save Graph on SCC",
               style = "background-color: #87cefa; color: white; width: 100%;"
             )
           ),
@@ -2168,7 +2168,7 @@ server <- function(input, output, session) {
             6,
             downloadButton(
               "download_nes_barplot",
-              "Download plot",
+              "Download Plot to Local",
               style = "background-color: #4CAF50; color: white; width: 100%;"
             )
           )
@@ -2221,7 +2221,13 @@ server <- function(input, output, session) {
       tabPanel(
         "Sender vs Receiver Roles",
         uiOutput("netAnalysis_signalingRole_scatter_ui")# netAnalysis_signalingRole_scatter
+      ),
+      
+      tabPanel(
+        "Pathway Role Heatmap",
+        uiOutput("netAnalysis_signalingRole_heatmap_ui")# netAnalysis_signalingRole_heatmap
       )
+      
     )
   })
   
@@ -2229,7 +2235,7 @@ server <- function(input, output, session) {
     tagList(
       div(
         style = "display: flex; justify-content: center;",
-        plotOutput("netVisual_circle_plot_ui")
+        uiOutput("netVisual_circle_control_ui")
       ),
       
       fluidRow(
@@ -2277,7 +2283,7 @@ server <- function(input, output, session) {
         6,
         actionButton(
           "circle_barplot",
-          "Save Graph",
+          "Save Graph on SCC",
           style = "background-color: #87cefa; color: white; width: 100%;"
         )
       ),
@@ -2285,7 +2291,7 @@ server <- function(input, output, session) {
         6,
         downloadButton(
           "download_circle",
-          "Download plot",
+          "Download Plot to Local",
           style = "background-color: #4CAF50; color: white; width: 100%;"
         )
       )
@@ -2297,7 +2303,7 @@ server <- function(input, output, session) {
     tagList(
       div(
         style = "display: flex; justify-content: center;",
-        plotOutput("netAnalysis_signalingRole_scatter_plot")
+        uiOutput("netAnalysis_signalingRole_scatter_control_ui")
       ),
       
       fluidRow(
@@ -2341,7 +2347,7 @@ server <- function(input, output, session) {
           6,
           actionButton(
             "save_role_scatter",
-            "Save Graph",
+            "Save Graph on SCC",
             style = "background-color: #87cefa; color: white; width: 100%;"
           )
         ),
@@ -2349,7 +2355,86 @@ server <- function(input, output, session) {
           6,
           downloadButton(
             "download_role_scatter",
-            "Download plot",
+            "Download Plot to Local",
+            style = "background-color: #4CAF50; color: white; width: 100%;"
+          )
+        )
+      )
+    )
+  })
+  
+  output$netAnalysis_signalingRole_heatmap_ui <- renderUI({
+    
+    tagList(
+      
+      div(
+        style = "display: flex; justify-content: center;",
+        uiOutput("netAnalysis_signalingRole_heatmap_control")
+      ),
+      
+      fluidRow(
+        column(3,
+               selectInput(
+                 "netAnalysis_signalingRole_heatmap_pattern",
+                 "Role pattern",
+                 choices = c(
+                   "Outgoing" = "outgoing",
+                   "Incoming" = "incoming",
+                   "Both" = "both"
+                 ),
+                 selected = "both"
+               )
+        ),
+        column(3,
+               selectInput(
+                 "netAnalysis_signalingRole_heatmap_color",
+                 "Heatmap color",
+                 choices = c(
+                   "Reds" = "Reds",
+                   "Blues" = "Blues",
+                   "Greens" = "Greens",
+                   "Purples" = "Purples",
+                   "Oranges" = "Oranges"
+                 ),
+                 selected = "Greens"
+               )
+        ),
+        column(3, numericInput("netAnalysis_signalingRole_heatmap_axis_title_size", "Axis title size", value = 10)),
+        column(3, numericInput("netAnalysis_signalingRole_heatmap_axis_text_size", "Axis text size", value = 8))
+      ),
+      
+      fluidRow(
+        column(3, numericInput("netAnalysis_signalingRole_heatmap_legend_size", "Legend size", value = 10)),
+        column(3, numericInput("netAnalysis_signalingRole_heatmap_width", "PDF width (inch)", value = if (is.null(rv$cccd_obj$data_merge)) {6} else {12})),
+        column(3, numericInput("netAnalysis_signalingRole_heatmap_height", "PDF height (inch)", value = 5))
+      ),
+      
+      fluidRow(
+        column(
+          12,
+          textInput(
+            "netAnalysis_signalingRole_heatmap_save_path",
+            "Output directory",
+            value = file.path(rv$save_path, "CellCellCommunication"),
+            width = "100%"
+          )
+        )
+      ),
+      
+      fluidRow(
+        column(
+          6,
+          actionButton(
+            "save_netAnalysis_signalingRole_heatmap",
+            "Save Graph on SCC",
+            style = "background-color: #87cefa; color: white; width: 100%;"
+          )
+        ),
+        column(
+          6,
+          downloadButton(
+            "download_netAnalysis_signalingRole_heatmap",
+            "Download Plot to Local",
             style = "background-color: #4CAF50; color: white; width: 100%;"
           )
         )
@@ -2358,25 +2443,192 @@ server <- function(input, output, session) {
   })
   # ----------------- Cell Cell Communication UI - pathway-----------------
   output$ccc_pathway_control_ui <- renderUI({
-    tabsetPanel(
-      tabPanel(
-        "Pathway Network",
-        uiOutput("netVisual_aggregate_ui")
+    tagList(
+      actionButton("ccc_pathway_select_btn", "Select Cell Cell Communication pathway to display", class = "btn-success", width = "100%"),
+      uiOutput("ccc_pathway_result_ui")
+      )
+  })
+  
+  output$ccc_pathway_result_ui <- renderUI({
+    pathway <- rv$ccc_pathway_select
+    
+    if (!is.null(pathway) && pathway != "") {
+      tabsetPanel(
+        tabPanel(
+          "Pathway Network",
+          uiOutput("netVisual_aggregate_ui")
+        ),
+        tabPanel(
+          "Pathway Heatmap",
+          uiOutput("netVisual_heatmap_ui")
+        ),
+        tabPanel(
+          "Pathway Role Network",
+          uiOutput("netAnalysis_signalingRole_network_ui")
+        ),
+        tabPanel(
+          "L-R Contribution",
+          uiOutput("netAnalysis_contribution_ui")
+        )
+      )
+    } else {
+      div(
+        style = "padding: 15px; background-color: #fff3cd; border: 1px solid #ffeeba; border-radius: 5px;",
+        strong("Pathway required"),
+        br(),
+        "Please select and confirm a pathway first."
+      )
+    }
+  })
+  
+  output$netVisual_aggregate_ui <- renderUI({
+    tagList(
+      div(
+        style = "display: flex; justify-content: center;",
+        uiOutput("netVisual_aggregate_control")
       ),
-      tabPanel(
-        "Pathway Heatmap",
-        uiOutput("netVisual_heatmap_ui")
+      
+      fluidRow(
+        column(
+          3,
+          selectInput(
+            "aggregate_layout",
+            "Layout",
+            choices = c(
+              "Circle" = "circle",
+              "Hierarchy" = "hierarchy",
+              "Chord" = "chord"
+            ),
+            selected = "circle"
+          )
+        ),
+        column(3, numericInput("aggregate_vertex_label_size", "Label size", value = 1)),
+        column(3, numericInput("aggregate_edge_width_max", "Max line width", value = 8)),
+        column(3, numericInput("aggregate_arrow_size", "Arrow size", value = 0.2))
       ),
-      tabPanel(
-        "Pathway Role Heatmap",
-        uiOutput("netAnalysis_signalingRole_heatmap_ui")
+      
+      conditionalPanel(
+        condition = "input.aggregate_layout == 'hierarchy'",
+        fluidRow(
+          column(
+            6,
+            textInput(
+              "aggregate_vertex_receiver",
+              "Receiver cell index for hierarchy",
+              value = "1,2",
+              placeholder = "e.g. 1 or 1,2,3, at least two value"
+            )
+          ),
+          column(
+            6,
+            helpText("Hierarchy layout requires receiver cell indices, e.g. 1,2,3.")
+          )
+        )
       ),
-      tabPanel(
-        "L-R Contribution",
-        uiOutput("netAnalysis_contribution_ui")
+      
+      fluidRow(
+        column(3, numericInput("aggregate_width", "PDF width (inch)", value = if(is.null(rv$cccd_obj$data_merge)){6}else{12})),
+        column(3, numericInput("aggregate_height", "PDF height (inch)", value = 6))
+      ),
+      
+      fluidRow(
+        column(
+          12,
+          textInput(
+            "aggregate_save_path",
+            "Output directory",
+            value = file.path(rv$save_path, "CellCellCommunication"),
+            width = "100%"
+          )
+        )
+      ),
+      
+      fluidRow(
+        column(
+          6,
+          actionButton(
+            "save_netVisual_aggregate",
+            "Save Graph on SCC",
+            style = "background-color: #87cefa; color: white; width: 100%;"
+          )
+        ),
+        column(
+          6,
+          downloadButton(
+            "download_netVisual_aggregate",
+            "Download Plot to Local",
+            style = "background-color: #4CAF50; color: white; width: 100%;"
+          )
+        )
       )
     )
   })
+  
+  output$netVisual_heatmap_ui <- renderUI({
+    tagList(
+      div(
+        style = "display: flex; justify-content: center;",
+        uiOutput("netVisual_heatmap_control")
+      ),
+      
+      fluidRow(
+        column(3,
+          selectInput(
+            "netVisual_heatmap_color",
+            "Heatmap color",
+            choices = c(
+              "Reds" = "Reds",
+              "Blues" = "Blues",
+              "Greens" = "Greens",
+              "Purples" = "Purples",
+              "Oranges" = "Oranges"
+            ), selected = "Reds"
+          )),
+        column(3, numericInput("netVisual_heatmap_axis_title_size", "Axis title size", value = 10)),
+        column(3, numericInput("netVisual_heatmap_axis_text_size", "Axis text size", value = 8))
+        ),
+      
+      fluidRow(
+        column(3, numericInput("netVisual_heatmap_legend_size", "Legend size", value = 10)),
+        column(3, numericInput("netVisual_heatmap_width", "PDF width (inch)", value = if(is.null(rv$cccd_obj$data_merge)){5}else{10})),
+        column(3, numericInput("netVisual_heatmap_height", "PDF height (inch)", value = 4))
+      ),
+      
+      fluidRow(
+        column(
+          12,
+          textInput(
+            "netVisual_heatmap_save_path",
+            "Output directory",
+            value = file.path(rv$save_path, "CellCellCommunication"),
+            width = "100%"
+          )
+        )
+      ),
+      
+      fluidRow(
+        column(
+          6,
+          actionButton(
+            "save_netVisual_heatmap",
+            "Save Graph on SCC",
+            style = "background-color: #87cefa; color: white; width: 100%;"
+          )
+        ),
+        column(
+          6,
+          downloadButton(
+            "download_netVisual_heatmap",
+            "Download Plot to Local",
+            style = "background-color: #4CAF50; color: white; width: 100%;"
+          )
+        )
+      )
+    )
+  })
+  
+  
+  
   # ----------------- Cell Cell Communication UI - LRpair-----------------
   output$ccc_pair_control_ui <- renderUI({
     NULL
@@ -4501,6 +4753,299 @@ server <- function(input, output, session) {
     removeModal()
     rv$ui_freeze <- FALSE
   })
+  # ----------------- VISUALIZATION FUNCTION CCC Pathway Select -----------------
+  observeEvent(input$ccc_pathway_select_btn, {
+    req(rv$cccd_obj$data)
+    rv$ui_freeze = TRUE
+    is_compare <- !is.null(rv$cccd_obj$data_merge)
+    
+    get_pathway_summary <- function(cellchat_obj, group_name) {
+      subsetCommunication(
+        cellchat_obj,
+        slot.name = "netP"
+      ) %>%
+        dplyr::group_by(pathway_name) %>%
+        dplyr::summarise(
+          total_prob = sum(prob),
+          n_interactions = dplyr::n(),
+          .groups = "drop"
+        ) %>%
+        dplyr::rename(
+          !!paste0(group_name, "_total_prob") := total_prob,
+          !!paste0(group_name, "_count") := n_interactions
+        )
+    }
+    
+    get_netP_matrix <- function(cellchat_obj, pathway) {
+      prob_obj <- cellchat_obj@netP$prob
+      
+      if (is.array(prob_obj) && length(dim(prob_obj)) == 3) {
+        pathway_names <- dimnames(prob_obj)[[3]]
+        
+        if (!(pathway %in% pathway_names)) {
+          return(data.frame(Message = "Current pathway does not exist"))
+        }
+        
+        mat <- prob_obj[, , pathway, drop = FALSE]
+        mat <- mat[, , 1]
+        
+      } else if (is.list(prob_obj)) {
+        if (!(pathway %in% names(prob_obj))) {
+          return(data.frame(Message = "Current pathway does not exist"))
+        }
+        
+        mat <- prob_obj[[pathway]]
+        
+      } else {
+        return(data.frame(Message = "Unsupported netP$prob structure"))
+      }
+      
+      as.data.frame.matrix(round(mat, 2))
+    }
+    
+    if (is_compare) {
+      cellchat_list <- rv$cccd_obj$data
+      
+      control_obj <- cellchat_list[["CONTROL"]]
+      treatment_obj <- cellchat_list[["TREATMENT"]]
+      
+      req(control_obj)
+      req(treatment_obj)
+      
+      control_summary <- get_pathway_summary(control_obj, "C")
+      treatment_summary <- get_pathway_summary(treatment_obj, "T")
+      
+      pathway_summary <- dplyr::full_join(
+        control_summary,
+        treatment_summary,
+        by = "pathway_name"
+      ) %>%
+        dplyr::mutate(
+          C_total_prob = tidyr::replace_na(C_total_prob, 0),
+          T_total_prob = tidyr::replace_na(T_total_prob, 0),
+          C_count = tidyr::replace_na(C_count, 0),
+          T_count = tidyr::replace_na(T_count, 0),
+          
+          total_prob = C_total_prob + T_total_prob,
+          prob_diff = T_total_prob - C_total_prob,
+          count_diff = T_count - C_count,
+          
+          C_total_prob = round(C_total_prob, 2),
+          T_total_prob = round(T_total_prob, 2),
+          total_prob = round(total_prob, 2),
+          prob_diff = round(prob_diff, 2)
+        ) %>%
+        dplyr::arrange(dplyr::desc(total_prob))
+    } else {
+      
+      cellchat_obj <- rv$cccd_obj$data
+      
+      pathway_summary <- subsetCommunication(
+        cellchat_obj,
+        slot.name = "netP"
+      ) %>%
+        dplyr::group_by(pathway_name) %>%
+        dplyr::summarise(
+          total_prob = sum(prob),
+          n_interactions = dplyr::n(),
+          .groups = "drop"
+        ) %>%
+        dplyr::mutate(
+          total_prob = round(total_prob, 2)
+        ) %>%
+        dplyr::arrange(dplyr::desc(total_prob))
+    }
+    
+    showModal(
+      modalDialog(
+        title = "netP Pathway Probability",
+        size = "l",
+        easyClose = FALSE,
+        footer = tagList(
+          actionButton(
+            "confirm_netP_pathway",
+            "Confirm",
+            class = "btn-success"
+          ),
+          modalButton("Close")
+        ),
+        
+        fluidRow(
+          column(
+            width = 5,
+            
+            textInput(
+              "netP_pathway_input",
+              "Pathway name",
+              value = ifelse(
+                nrow(pathway_summary) > 0,
+                pathway_summary$pathway_name[1],
+                ""
+              ),
+              width = "100%"
+            ),
+            
+            if (is_compare) {
+              tagList(
+                h4("CONTROL"),
+                div(
+                  style = "
+                  max-height: 300px;
+                  max-width: 100%;
+                  overflow-x: auto;
+                  overflow-y: auto;
+                  border: 1px solid #ddd;
+                  padding: 8px;
+                ",
+                  tableOutput("netP_control_matrix")
+                ),
+                
+                br(),
+                
+                h4("TREATMENT"),
+                div(
+                  style = "
+                  max-height: 300px;
+                  max-width: 100%;
+                  overflow-x: auto;
+                  overflow-y: auto;
+                  border: 1px solid #ddd;
+                  padding: 8px;
+                ",
+                  tableOutput("netP_treatment_matrix")
+                )
+              )
+            } else {
+              tagList(
+                div(
+                  style = "
+                            max-height: 500px;
+                            max-width: 100%;
+                            overflow-x: auto;
+                            overflow-y: auto;
+                            border: 1px solid #ddd;
+                            padding: 8px;
+                          ",
+                  tableOutput("netP_pathway_matrix")
+                ),
+                
+                br(),
+                
+                tags$div(
+                  style = "
+                            background-color:#f8f9fa;
+                            border-left:4px solid #007bff;
+                            padding:10px;
+                            font-size:13px;
+                          ",
+                  HTML(
+                          "<b>Interpretation:</b><br/>
+                          Rows = Sender cell types<br/>
+                          Columns = Receiver cell types<br/>
+                          Example: value at row <b>C2</b> and column <b>C0</b> means
+                          <b>C2 → C0</b> communication probability."
+                  )
+                )
+              )
+            }
+          ),
+          
+          column(
+            width = 7,
+            
+            div(
+              style = "
+              max-height: 650px;
+              max-width: 100%;
+              overflow-x: auto;
+              overflow-y: auto;
+            ",
+              DT::DTOutput("netP_pathway_summary_table")
+            )
+          )
+        )
+      )
+    )
+    
+    output$netP_pathway_summary_table <- DT::renderDT({
+      DT::datatable(
+        pathway_summary,
+        selection = list(mode = "single", target = "row"),
+        rownames = FALSE,
+        extensions = "FixedColumns",
+        options = list(
+          dom = "t",
+          paging = FALSE,
+          searching = FALSE,
+          info = FALSE,
+          ordering = TRUE,
+          order = list(list(
+            which(colnames(pathway_summary) == "total_prob") - 1,
+            "desc"
+          )),
+          scrollX = TRUE,
+          scrollY = "600px",
+          fixedColumns = list(leftColumns = 1)
+        )
+      )
+    })
+    
+    observeEvent(input$netP_pathway_summary_table_rows_selected, {
+      selected_row <- input$netP_pathway_summary_table_rows_selected
+      
+      if (length(selected_row) == 1) {
+        updateTextInput(
+          session,
+          "netP_pathway_input",
+          value = pathway_summary$pathway_name[selected_row]
+        )
+      }
+    })
+    
+    if (is_compare) {
+      
+      output$netP_control_matrix <- renderTable({
+        req(input$netP_pathway_input)
+        
+        pathway <- trimws(input$netP_pathway_input)
+        get_netP_matrix(control_obj, pathway)
+        
+      }, rownames = TRUE)
+      
+      output$netP_treatment_matrix <- renderTable({
+        req(input$netP_pathway_input)
+        
+        pathway <- trimws(input$netP_pathway_input)
+        get_netP_matrix(treatment_obj, pathway)
+        
+      }, rownames = TRUE)
+      
+    } else {
+      
+      output$netP_pathway_matrix <- renderTable({
+        req(input$netP_pathway_input)
+        
+        pathway <- trimws(input$netP_pathway_input)
+        get_netP_matrix(cellchat_obj, pathway)
+        
+      }, rownames = TRUE)
+    }
+  })
+  
+  observeEvent(input$confirm_netP_pathway, {
+    req(input$netP_pathway_input)
+    
+    pathway <- trimws(input$netP_pathway_input)
+    
+    validate(
+      need(pathway != "", "Pathway cannot be empty.")
+    )
+    
+    rv$ccc_pathway_select <- pathway
+    rv$ui_freeze = FALSE
+    removeModal()
+  })
+  
   # ----------------- VISUALIZATION FUNCTION Original Violin Plot -----------------
 
   visualization_data_prepared <- reactive({
@@ -7334,6 +7879,16 @@ server <- function(input, output, session) {
     ))
   })
   
+  output$netVisual_circle_control_ui <- renderUI({
+    
+    if (!is.null(rv$cccd_obj$data_merge)) {
+      width_val <- "800px"
+    } else {
+      width_val <- "400px"
+    }
+    plotOutput("netVisual_circle_plot_ui", height = "400px", width = width_val)
+  })
+  
   output$netVisual_circle_plot_ui <- renderPlot({
     
     req(netVisual_circle_reactive())
@@ -7499,6 +8054,15 @@ server <- function(input, output, session) {
     
     return(p)
   })
+  output$netAnalysis_signalingRole_scatter_control_ui <- renderUI({
+    
+    if (!is.null(rv$cccd_obj$data_merge)) {
+      width_val <- "800px"
+    } else {
+      width_val <- "400px"
+    }
+      plotOutput("netAnalysis_signalingRole_scatter_plot", height = "300px", width = width_val)
+  })
   
   output$netAnalysis_signalingRole_scatter_plot <- renderPlot({
     
@@ -7581,6 +8145,1047 @@ server <- function(input, output, session) {
         duration = 3
       )
     }
+  )
+  
+  # ----------------- VISUALIZATION FUNCTION Cell Cell Communication netAnalysis_signalingRole_heatmap -----------------
+  
+  netAnalysis_signalingRole_heatmap_reactive <- reactive({
+    
+    req(rv$cccd_obj)
+    req(input$netAnalysis_signalingRole_heatmap_pattern)
+    req(input$netAnalysis_signalingRole_heatmap_color)
+    req(input$netAnalysis_signalingRole_heatmap_axis_title_size)
+    req(input$netAnalysis_signalingRole_heatmap_axis_text_size)
+    req(input$netAnalysis_signalingRole_heatmap_legend_size)
+    req(!rv$ui_freeze)
+    
+    cellchat_obj <- rv$cccd_obj$data
+    cellchat_merge <- rv$cccd_obj$data_merge
+    pattern_use <- input$netAnalysis_signalingRole_heatmap_pattern
+    
+    is_cellchat_obj <- function(x) {
+      methods::is(x, "CellChat")
+    }
+    
+    pattern_list <- if (pattern_use == "both") {
+      c("incoming", "outgoing")
+    } else {
+      pattern_use
+    }
+    
+    make_role_heatmap <- function(obj, dataset_name = NULL, pattern_single) {
+      
+      title_use <- if (is.null(dataset_name)) {
+        pattern_single
+      } else {
+        paste0(dataset_name, "_", pattern_single)
+      }
+      
+      ht <- netAnalysis_signalingRole_heatmap(
+        obj,
+        pattern = pattern_single,
+        slot.name = "netP",
+        color.heatmap = input$netAnalysis_signalingRole_heatmap_color,
+        title = title_use,
+        font.size = input$netAnalysis_signalingRole_heatmap_axis_text_size
+      )
+      
+      n_pathway <- nrow(ht@matrix)
+      n_celltype <- ncol(ht@matrix)
+      
+      ht@heatmap_param$height <- grid::unit(
+        max(100, n_pathway * 3),
+        "mm"
+      )
+      
+      ht@heatmap_param$width <- grid::unit(
+        max(80, n_celltype * 8),
+        "mm"
+      )
+      
+      mat_vals <- as.numeric(ht@matrix)
+      mat_vals <- mat_vals[is.finite(mat_vals)]
+      
+      if (length(unique(mat_vals)) > 2) {
+        ht@matrix_color_mapping <- ComplexHeatmap::ColorMapping(
+          name = "Relative strength",
+          col_fun = circlize::colorRamp2(
+            c(
+              min(mat_vals),
+              mean(range(mat_vals)),
+              max(mat_vals)
+            ),
+            RColorBrewer::brewer.pal(
+              9,
+              input$netAnalysis_signalingRole_heatmap_color
+            )[c(1, 5, 9)]
+          )
+        )
+      }
+      
+      ht@row_names_param$gp <- grid::gpar(
+        fontsize = input$netAnalysis_signalingRole_heatmap_axis_text_size
+      )
+      
+      ht@column_names_param$gp <- grid::gpar(
+        fontsize = input$netAnalysis_signalingRole_heatmap_axis_text_size
+      )
+      
+      ht@row_title_param$gp <- grid::gpar(
+        fontsize = input$netAnalysis_signalingRole_heatmap_axis_title_size
+      )
+      
+      ht@column_title_param$gp <- grid::gpar(
+        fontsize = input$netAnalysis_signalingRole_heatmap_axis_title_size
+      )
+      
+      ht@matrix_legend_param$title_gp <- grid::gpar(
+        fontsize = input$netAnalysis_signalingRole_heatmap_legend_size
+      )
+      
+      ht@matrix_legend_param$labels_gp <- grid::gpar(
+        fontsize = input$netAnalysis_signalingRole_heatmap_legend_size
+      )
+      
+      ht
+    }
+    
+    draw_heatmap_to_grob <- function(ht) {
+      grid::grid.grabExpr({
+        ComplexHeatmap::draw(ht)
+      })
+    }
+    
+    if (!is.null(cellchat_merge)) {
+      
+      object.list <- cellchat_obj
+      
+      if (!is.list(object.list) || length(object.list) < 2) {
+        return(list(
+          type = "message",
+          content = "The uploaded file has a merged CellChat object, but the original object list is not available."
+        ))
+      }
+      
+      object.list <- object.list[
+        sapply(object.list, is_cellchat_obj)
+      ]
+      
+      if (length(object.list) == 0) {
+        return(list(
+          type = "message",
+          content = "No valid CellChat object was found in the object list."
+        ))
+      }
+      
+      dataset_use <- names(object.list)[1:min(2, length(object.list))]
+      
+      grob_matrix <- lapply(pattern_list, function(pattern_single) {
+        ht_list <- lapply(dataset_use, function(dataset_name) {
+          make_role_heatmap(
+            obj = object.list[[dataset_name]],
+            dataset_name = dataset_name,
+            pattern_single = pattern_single
+          )
+        })
+        
+        lapply(ht_list, draw_heatmap_to_grob)
+      })
+      
+      grob_list <- unlist(grob_matrix, recursive = FALSE)
+      
+      plot_fun <- function() {
+        
+        if (pattern_use == "both") {
+          combined_grob <- gridExtra::arrangeGrob(
+            grobs = grob_list,
+            nrow = 2,
+            ncol = 2,
+            byrow = TRUE
+          )
+        } else {
+          combined_grob <- gridExtra::arrangeGrob(
+            grobs = grob_list,
+            nrow = 1,
+            ncol = 2
+          )
+        }
+        
+        grid::grid.newpage()
+        grid::grid.draw(combined_grob)
+        invisible(NULL)
+      }
+      
+    } else {
+      
+      grob_list <- lapply(pattern_list, function(pattern_single) {
+        ht <- make_role_heatmap(
+          obj = cellchat_obj,
+          dataset_name = NULL,
+          pattern_single = pattern_single
+        )
+        
+        draw_heatmap_to_grob(ht)
+      })
+      
+      plot_fun <- function() {
+        
+        if (pattern_use == "both") {
+          combined_grob <- gridExtra::arrangeGrob(
+            grobs = grob_list,
+            nrow = 1,
+            ncol = 2
+          )
+        } else {
+          combined_grob <- gridExtra::arrangeGrob(
+            grobs = grob_list,
+            nrow = 1,
+            ncol = 1
+          )
+        }
+        
+        grid::grid.newpage()
+        grid::grid.draw(combined_grob)
+        invisible(NULL)
+      }
+    }
+    
+    list(
+      type = "plot",
+      plot_fun = plot_fun
+    )
+  })
+  output$netAnalysis_signalingRole_heatmap_control <- renderUI({
+    
+    has_merge <- !is.null(rv$cccd_obj$data_merge)
+    
+    is_both <- !is.null(input$netAnalysis_signalingRole_heatmap_pattern) &&
+      input$netAnalysis_signalingRole_heatmap_pattern == "both"
+    
+    get_pathway_n <- function(obj) {
+      if (is.null(obj)) return(30)
+      if (methods::is(obj, "CellChat")) {
+        if (!is.null(obj@netP$pathways)) {
+          return(length(obj@netP$pathways))
+        }
+      }
+      return(30)
+    }
+    
+    get_cluster_n <- function(obj) {
+      if (is.null(obj)) return(10)
+      if (methods::is(obj, "CellChat")) {
+        if (!is.null(obj@idents)) {
+          return(length(levels(obj@idents)))
+        }
+        if (!is.null(obj@net$weight)) {
+          return(ncol(obj@net$weight))
+        }
+      }
+      return(10)
+    }
+    
+    if (has_merge) {
+      object.list <- rv$cccd_obj$data
+      object.list <- object.list[
+        sapply(object.list, function(x) methods::is(x, "CellChat"))
+      ]
+      
+      pathway_n <- max(sapply(object.list, get_pathway_n))
+      cluster_n <- max(sapply(object.list, get_cluster_n))
+    } else {
+      pathway_n <- get_pathway_n(rv$cccd_obj$data)
+      cluster_n <- get_cluster_n(rv$cccd_obj$data)
+    }
+    
+    single_panel_height <- max(100, pathway_n * 3) * 3.78
+    single_panel_width <- max(80, cluster_n * 8) * 3.78
+    
+    if (is_both && !has_merge) {
+      width_val <- paste0(single_panel_width * 2, "px")
+      height_val <- paste0(single_panel_height, "px")
+      
+    } else if (is_both && has_merge) {
+      width_val <- paste0(single_panel_width * 2, "px")
+      height_val <- paste0(single_panel_height * 2, "px")
+      
+    } else if (!is_both && !has_merge) {
+      width_val <- paste0(single_panel_width, "px")
+      height_val <- paste0(single_panel_height, "px")
+      
+    } else {
+      width_val <- paste0(single_panel_width * 2, "px")
+      height_val <- paste0(single_panel_height, "px")
+    }
+    
+    div(
+      style = "max-width: 800px; max-height: 1600px; overflow-x: auto; overflow-y: auto; width: 100%;",
+      plotOutput(
+        "netAnalysis_signalingRole_heatmap_plot",
+        height = height_val,
+        width = width_val
+      )
+    )
+  })
+  output$netAnalysis_signalingRole_heatmap_plot <- renderPlot({
+    
+    req(netAnalysis_signalingRole_heatmap_reactive())
+    req(!rv$ui_freeze)
+    
+    res <- netAnalysis_signalingRole_heatmap_reactive()
+    
+    if (is.list(res) && res$type == "message") {
+      plot.new()
+      text(0.5, 0.5, res$content, cex = 1.2, col = "red")
+      return()
+    }
+    
+    res$plot_fun()
+  })
+  
+  observeEvent(input$save_netAnalysis_signalingRole_heatmap, {
+    
+    req(netAnalysis_signalingRole_heatmap_reactive())
+    req(input$netAnalysis_signalingRole_heatmap_save_path)
+    
+    res <- netAnalysis_signalingRole_heatmap_reactive()
+    
+    if (is.list(res) && res$type == "message") {
+      showNotification(res$content, type = "error")
+      return()
+    }
+    
+    out_dir <- input$netAnalysis_signalingRole_heatmap_save_path
+    
+    if (!dir.exists(out_dir)) {
+      dir.create(out_dir, recursive = TRUE)
+    }
+    
+    out_file <- file.path(
+      out_dir,
+      paste0(
+        "PathwayRoleHeatmap_",
+        input$netAnalysis_signalingRole_heatmap_pattern,
+        "_",
+        format(Sys.time(), "%Y%m%d_%H%M%S"),
+        ".pdf"
+      )
+    )
+    
+    pdf(
+      out_file,
+      width = input$netAnalysis_signalingRole_heatmap_width,
+      height = input$netAnalysis_signalingRole_heatmap_height
+    )
+    
+    res$plot_fun()
+    
+    dev.off()
+    
+    showNotification(
+      paste0("Saved pathway role heatmap: ", out_file),
+      type = "message"
+    )
+  })
+  output$download_netAnalysis_signalingRole_heatmap <- downloadHandler(
+    
+    filename = function() {
+      paste0(
+        "PathwayRoleHeatmap_",
+        input$netAnalysis_signalingRole_heatmap_pattern,
+        "_",
+        format(Sys.time(), "%Y%m%d_%H%M%S"),
+        ".pdf"
+      )
+    },
+    
+    content = function(file) {
+      
+      req(netAnalysis_signalingRole_heatmap_reactive())
+      
+      res <- netAnalysis_signalingRole_heatmap_reactive()
+      
+      pdf(
+        file,
+        width = input$netAnalysis_signalingRole_heatmap_width,
+        height = input$netAnalysis_signalingRole_heatmap_height
+      )
+      
+      if (is.list(res) && res$type == "message") {
+        plot.new()
+        text(0.5, 0.5, res$content, cex = 1.2, col = "red")
+      } else {
+        res$plot_fun()
+      }
+      
+      dev.off()
+      
+      showNotification(
+        "Pathway role heatmap downloaded successfully.",
+        type = "message",
+        duration = 3
+      )
+    }
+  )
+  # ----------------- VISUALIZATION FUNCTION Cell Cell Communication netVisual_aggregate -----------------
+  netVisual_aggregate_reactive <- reactive({
+    
+    req(rv$cccd_obj)
+    req(rv$ccc_pathway_select)
+    req(input$aggregate_layout)
+    req(!rv$ui_freeze)
+    
+    cellchat_obj <- rv$cccd_obj$data
+    cellchat_merge <- rv$cccd_obj$data_merge
+    signaling_use <- rv$ccc_pathway_select
+    
+    if (is.null(signaling_use) || signaling_use == "") {
+      return(list(type = "message", content = "Please select a pathway first."))
+    }
+    
+    parse_vertex_receiver <- function(x, n_cell_groups) {
+      x <- gsub(" ", "", x)
+      x <- unlist(strsplit(x, ","))
+      x <- suppressWarnings(as.integer(x))
+      x <- unique(x[!is.na(x)])
+      x <- x[x >= 1 & x <= n_cell_groups]
+      if (length(x) == 0) return(NULL)
+      x
+    }
+    
+    plot_aggregate_one <- function(obj, dataset_name = NULL) {
+      
+      if (!(signaling_use %in% obj@netP$pathways)) {
+        plot.new()
+        text(0.5, 0.5, paste0("Pathway '", signaling_use, "' is not found."), col = "red", cex = 1.2)
+        return(invisible(NULL))
+      }
+      
+      title_use <- if (is.null(dataset_name)) signaling_use else paste0(signaling_use, "_", dataset_name)
+      
+      if (input$aggregate_layout == "circle") {
+        
+        pathway_index <- which(obj@netP$pathways == signaling_use)
+        mat <- obj@netP$prob[, , pathway_index]
+        if (!is.null(dimnames(obj@net$weight))) dimnames(mat) <- dimnames(obj@net$weight)
+        
+        g <- igraph::graph_from_adjacency_matrix(mat, mode = "directed", weighted = TRUE, diag = TRUE)
+        
+        n <- nrow(mat)
+        theta <- seq(0, 2 * pi, length.out = n + 1)[1:n]
+        layout_circle <- cbind(cos(theta), sin(theta))
+        rownames(layout_circle) <- rownames(mat)
+        
+        vertex_colors <- tryCatch(CellChat::scPalette(n), error = function(e) grDevices::rainbow(n))
+        names(vertex_colors) <- rownames(mat)
+        
+        edge_ends <- igraph::ends(g, igraph::E(g), names = TRUE)
+        edge_from <- edge_ends[, 1]
+        edge_to <- edge_ends[, 2]
+        edge_weights <- igraph::E(g)$weight
+        
+        edge_width <- edge_weights / max(edge_weights, na.rm = TRUE) * input$aggregate_edge_width_max
+        edge_colors <- grDevices::adjustcolor(vertex_colors[edge_from], alpha.f = 0.6)
+        
+        loop_angles <- rep(0, igraph::ecount(g))
+        for (i in seq_len(igraph::ecount(g))) {
+          if (edge_from[i] == edge_to[i]) {
+            vertex_index <- match(edge_from[i], rownames(mat))
+            loop_angles[i] <- theta[vertex_index]
+          }
+        }
+        
+        plot(
+          g,
+          layout = layout_circle,
+          vertex.label = NA,
+          vertex.size = 15,
+          vertex.color = vertex_colors,
+          vertex.frame.color = NA,
+          edge.width = edge_width,
+          edge.color = edge_colors,
+          edge.arrow.size = input$aggregate_arrow_size,
+          edge.curved = 0.25,
+          loop.angle = loop_angles,
+          loop.size = 1.2,
+          main = "",
+          margin = 0.2
+        )
+        
+        label_radius <- 1.15
+        label_adj <- ifelse(cos(theta) >= 0, 0, 1)
+        
+        text(
+          x = cos(theta) * label_radius,
+          y = sin(theta) * label_radius,
+          labels = rownames(mat),
+          cex = input$aggregate_vertex_label_size,
+          col = "black",
+          font = 1,
+          family = "sans",
+          adj = label_adj
+        )
+        
+        title(main = title_use)
+        return(invisible(NULL))
+      }
+      
+      if (input$aggregate_layout == "hierarchy") {
+        
+        n_cell_groups <- length(levels(obj@idents))
+        vertex_receiver_use <- parse_vertex_receiver(input$aggregate_vertex_receiver, n_cell_groups)
+        
+        if (is.null(vertex_receiver_use)) {
+          plot.new()
+          text(
+            0.5, 0.5,
+            paste0("Please enter valid receiver cell indices.\nValid range: 1 to ", n_cell_groups),
+            col = "red",
+            cex = 1.2
+          )
+          return(invisible(NULL))
+        }
+        
+        netVisual_aggregate(
+          obj,
+          signaling = signaling_use,
+          signaling.name = title_use,
+          layout = "hierarchy",
+          vertex.receiver = vertex_receiver_use,
+          vertex.label.cex = input$aggregate_vertex_label_size,
+          edge.width.max = input$aggregate_edge_width_max,
+          arrow.size = input$aggregate_arrow_size,
+          title.space = 2
+        )
+        
+        return(invisible(NULL))
+      }
+      
+      if (input$aggregate_layout == "chord") {
+        
+        netVisual_aggregate(
+          obj,
+          signaling = signaling_use,
+          signaling.name = title_use,
+          layout = "chord",
+          lab.cex = input$aggregate_vertex_label_size,
+          edge.width.max = input$aggregate_edge_width_max
+        )
+        
+        return(invisible(NULL))
+      }
+    }
+    
+    if (!is.null(cellchat_merge)) {
+      
+      object.list <- cellchat_obj
+      
+      if (!is.list(object.list) || length(object.list) < 2) {
+        return(list(
+          type = "message",
+          content = "The uploaded file has a merged CellChat object, but the original object list is not available."
+        ))
+      }
+      
+      plot_fun <- function() {
+        
+        dataset_use <- names(object.list)[1:min(2, length(object.list))]
+        par(mfrow = c(1, 2), xpd = TRUE)
+
+        for (dataset_name in dataset_use) {
+          plot_aggregate_one(
+            object.list[[dataset_name]],
+            dataset_name = dataset_name
+          )
+        }
+        
+        invisible(NULL)
+      }
+      
+    } else {
+      
+      plot_fun <- function() {
+        par(mfrow = c(1, 1), xpd = TRUE)
+        plot_aggregate_one(cellchat_obj)
+        invisible(NULL)
+      }
+    }
+    
+    list(type = "plot", plot_fun = plot_fun)
+  })
+  
+  output$netVisual_aggregate_control <- renderUI({
+    
+    if (!is.null(rv$cccd_obj$data_merge)) {
+      width_val <- "800px"
+    } else {
+      width_val <- "400px"
+    }
+    plotOutput("netVisual_aggregate_plot", height = "400px", width = width_val)
+  })
+  
+  output$netVisual_aggregate_plot <- renderPlot({
+    
+    req(netVisual_aggregate_reactive())
+    req(!rv$ui_freeze)
+    
+    res <- netVisual_aggregate_reactive()
+    
+    if (is.list(res) && res$type == "message") {
+      plot.new()
+      text(0.5, 0.5, res$content, cex = 1.2, col = "red")
+      return()
+    }
+    
+    res$plot_fun()
+  })
+  
+  observeEvent(input$save_netVisual_aggregate, {
+    
+    req(netVisual_aggregate_reactive())
+    req(input$aggregate_save_path)
+    
+    res <- netVisual_aggregate_reactive()
+    
+    if (is.list(res) && res$type == "message") {
+      showNotification(res$content, type = "error")
+      return()
+    }
+    
+    out_dir <- input$aggregate_save_path
+    if (!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE)
+    
+    out_file <- file.path(
+      out_dir,
+      paste0(
+        "PathwayNetwork_",
+        rv$ccc_pathway_select,
+        "_",
+        input$aggregate_layout,
+        "_",
+        format(Sys.time(), "%Y%m%d_%H%M%S"),
+        ".pdf"
+      )
+    )
+    
+    pdf(
+      out_file,
+      width = input$aggregate_width,
+      height = input$aggregate_height
+    )
+    
+    res$plot_fun()
+    
+    dev.off()
+    
+    showNotification(
+      paste0("Saved pathway network: ", out_file),
+      type = "message"
+    )
+  })
+  
+  output$download_netVisual_aggregate <- downloadHandler(
+    
+    filename = function() {
+      paste0(
+        "PathwayNetwork_",
+        rv$ccc_pathway_select,
+        "_",
+        input$aggregate_layout,
+        "_",
+        format(Sys.time(), "%Y%m%d_%H%M%S"),
+        ".pdf"
+      )
+    },
+    
+    content = function(file) {
+      
+      req(netVisual_aggregate_reactive())
+      
+      res <- netVisual_aggregate_reactive()
+      
+      pdf(
+        file,
+        width = input$aggregate_width,
+        height = input$aggregate_height
+      )
+      
+      if (is.list(res) && res$type == "message") {
+        plot.new()
+        text(0.5, 0.5, res$content, cex = 1.2, col = "red")
+      } else {
+        res$plot_fun()
+      }
+      
+      dev.off()
+      
+      showNotification(
+        "Pathway network downloaded successfully.",
+        type = "message",
+        duration = 3
+      )
+    }
+  )
+  # ----------------- VISUALIZATION FUNCTION Cell Cell Communication netVisual_heatmap -----------------
+  
+  netVisual_heatmap_reactive <- reactive({
+    
+    req(rv$cccd_obj)
+    req(rv$ccc_pathway_select)
+    req(input$netVisual_heatmap_color)
+    req(input$netVisual_heatmap_axis_title_size)
+    req(input$netVisual_heatmap_axis_text_size)
+    req(input$netVisual_heatmap_legend_size)
+    req(!rv$ui_freeze)
+    
+    cellchat_obj   <- rv$cccd_obj$data
+    cellchat_merge <- rv$cccd_obj$data_merge
+    
+    signaling_use <- trimws(rv$ccc_pathway_select)
+    
+    if (is.null(signaling_use) || signaling_use == "") {
+      return(list(
+        type = "message",
+        content = "Please select a pathway first."
+      ))
+    }
+    
+    is_cellchat_obj <- function(x) {
+      methods::is(x, "CellChat")
+    }
+    
+    pathway_exists <- function(obj) {
+      if (is.null(obj)) return(FALSE)
+      if (!is_cellchat_obj(obj)) return(FALSE)
+      if (is.null(obj@netP$pathways)) return(FALSE)
+      
+      signaling_use %in% trimws(obj@netP$pathways)
+    }
+    
+    make_pathway_heatmap <- function(obj, dataset_name = NULL) {
+      
+      if (!pathway_exists(obj)) {
+        return(NULL)
+      }
+      
+      title_use <- if (is.null(dataset_name)) {
+        signaling_use
+      } else {
+        paste0(signaling_use, "_", dataset_name)
+      }
+      
+      ht <- netVisual_heatmap(
+        obj,
+        signaling = signaling_use,
+        slot.name = "netP",
+        color.heatmap = input$netVisual_heatmap_color,
+        title.name = title_use,
+        font.size = input$netVisual_heatmap_axis_text_size
+      )
+      
+      ht@row_names_param$gp <- grid::gpar(
+        fontsize = input$netVisual_heatmap_axis_text_size
+      )
+      
+      ht@column_names_param$gp <- grid::gpar(
+        fontsize = input$netVisual_heatmap_axis_text_size
+      )
+      
+      ht@row_title_param$gp <- grid::gpar(
+        fontsize = input$netVisual_heatmap_axis_title_size
+      )
+      
+      ht@column_title_param$gp <- grid::gpar(
+        fontsize = input$netVisual_heatmap_axis_title_size
+      )
+      
+      ht@matrix_legend_param$title_gp <- grid::gpar(
+        fontsize = input$netVisual_heatmap_legend_size
+      )
+      
+      ht@matrix_legend_param$labels_gp <- grid::gpar(
+        fontsize = input$netVisual_heatmap_legend_size
+      )
+      
+      ht
+    }
+    
+    draw_heatmap_to_grob <- function(ht) {
+      grid::grid.grabExpr({
+        ComplexHeatmap::draw(ht)
+      })
+    }
+    
+    if (!is.null(cellchat_merge)) {
+      
+      object.list <- cellchat_obj
+      
+      if (!is.list(object.list) || length(object.list) < 2) {
+        return(list(
+          type = "message",
+          content = "The uploaded file has a merged CellChat object, but the original object list is not available."
+        ))
+      }
+      
+      object.list <- object.list[
+        sapply(object.list, is_cellchat_obj)
+      ]
+      
+      if (length(object.list) == 0) {
+        return(list(
+          type = "message",
+          content = "No valid CellChat object was found in the object list."
+        ))
+      }
+      
+      dataset_use <- names(object.list)[1:min(2, length(object.list))]
+      
+      ht_list <- lapply(dataset_use, function(dataset_name) {
+        
+        make_pathway_heatmap(
+          obj = object.list[[dataset_name]],
+          dataset_name = dataset_name
+        )
+        
+      })
+      
+      ht_list <- ht_list[!sapply(ht_list, is.null)]
+      
+      if (length(ht_list) == 0) {
+        
+        pathway_info <- paste(
+          unique(unlist(lapply(object.list, function(x) x@netP$pathways))),
+          collapse = ", "
+        )
+        
+        return(list(
+          type = "message",
+          content = paste0(
+            "Pathway '",
+            signaling_use,
+            "' is not found in selected datasets.\n",
+            "Available pathways include: ",
+            pathway_info
+          )
+        ))
+      }
+      
+      grob_list <- lapply(ht_list, draw_heatmap_to_grob)
+      
+      plot_fun <- function() {
+        
+        combined_grob <- gridExtra::arrangeGrob(
+          grobs = grob_list,
+          nrow = 1
+        )
+        
+        grid::grid.newpage()
+        grid::grid.draw(combined_grob)
+        
+        invisible(NULL)
+      }
+      
+    } else {
+      
+      ht <- make_pathway_heatmap(
+        obj = cellchat_obj,
+        dataset_name = NULL
+      )
+      
+      if (is.null(ht)) {
+        
+        pathway_info <- paste(
+          cellchat_obj@netP$pathways,
+          collapse = ", "
+        )
+        
+        return(list(
+          type = "message",
+          content = paste0(
+            "Pathway '",
+            signaling_use,
+            "' is not found.\n",
+            "Available pathways include: ",
+            pathway_info
+          )
+        ))
+      }
+      
+      plot_fun <- function() {
+        
+        grid::grid.newpage()
+        
+        ComplexHeatmap::draw(
+          ht,
+          newpage = FALSE
+        )
+        
+        invisible(NULL)
+      }
+    }
+    
+    list(
+      type = "plot",
+      plot_fun = plot_fun
+    )
+    
+  })
+  
+  output$netVisual_heatmap_control <- renderUI({
+    
+    if (!is.null(rv$cccd_obj$data_merge)) {
+      width_val <- "800px"
+    } else {
+      width_val <- "400px"
+    }
+    div(
+      style = "max-width: 600px; overflow-x: auto; width: 100%;",
+    plotOutput(
+      "netVisual_heatmap_plot",
+      height = "350px",
+      width = width_val
+    )
+    )
+    
+  })
+  
+  output$netVisual_heatmap_plot <- renderPlot({
+    
+    req(netVisual_heatmap_reactive())
+    req(!rv$ui_freeze)
+    
+    res <- netVisual_heatmap_reactive()
+    
+    if (is.list(res) && res$type == "message") {
+      
+      plot.new()
+      
+      text(
+        0.5,
+        0.5,
+        res$content,
+        cex = 1.2,
+        col = "red"
+      )
+      
+      return()
+    }
+    
+    res$plot_fun()
+    
+  })
+  
+  observeEvent(input$save_netVisual_heatmap, {
+    
+    req(netVisual_heatmap_reactive())
+    req(input$netVisual_heatmap_save_path)
+    
+    res <- netVisual_heatmap_reactive()
+    
+    if (is.list(res) && res$type == "message") {
+      
+      showNotification(
+        res$content,
+        type = "error"
+      )
+      
+      return()
+    }
+    
+    out_dir <- input$netVisual_heatmap_save_path
+    
+    if (!dir.exists(out_dir)) {
+      dir.create(
+        out_dir,
+        recursive = TRUE
+      )
+    }
+    
+    out_file <- file.path(
+      out_dir,
+      paste0(
+        "PathwayHeatmap_",
+        rv$ccc_pathway_select,
+        "_",
+        format(Sys.time(), "%Y%m%d_%H%M%S"),
+        ".pdf"
+      )
+    )
+    
+    pdf(
+      out_file,
+      width = input$netVisual_heatmap_width,
+      height = input$netVisual_heatmap_height
+    )
+    
+    res$plot_fun()
+    
+    dev.off()
+    
+    showNotification(
+      paste0(
+        "Saved pathway heatmap: ",
+        out_file
+      ),
+      type = "message"
+    )
+    
+  })
+  
+  output$download_netVisual_heatmap <- downloadHandler(
+    
+    filename = function() {
+      
+      paste0(
+        "PathwayHeatmap_",
+        rv$ccc_pathway_select,
+        "_",
+        format(Sys.time(), "%Y%m%d_%H%M%S"),
+        ".pdf"
+      )
+      
+    },
+    
+    content = function(file) {
+      
+      req(netVisual_heatmap_reactive())
+      
+      res <- netVisual_heatmap_reactive()
+      
+      pdf(
+        file,
+        width = input$netVisual_heatmap_width,
+        height = input$netVisual_heatmap_height
+      )
+      
+      if (is.list(res) && res$type == "message") {
+        
+        plot.new()
+        
+        text(
+          0.5,
+          0.5,
+          res$content,
+          cex = 1.2,
+          col = "red"
+        )
+        
+      } else {
+        
+        res$plot_fun()
+        
+      }
+      
+      dev.off()
+      
+      showNotification(
+        "Pathway heatmap downloaded successfully.",
+        type = "message",
+        duration = 3
+      )
+      
+    }
+    
   )
   
 
