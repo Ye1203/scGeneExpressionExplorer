@@ -2258,8 +2258,8 @@ server <- function(input, output, session) {
       fluidRow(
         column(3, numericInput("circle_arrow_size", "Arrow size", value = 0.2)),
         column(3, numericInput("circle_title_size", "Title size", value = 1.2)),
-        column(3, checkboxInput("circle_show_edge_label", "Show edge label", value = FALSE)),
-        column(3, checkboxInput("circle_remove_isolate", "Remove isolated cell groups", value = FALSE))
+        column(3, div(style = "padding-top: 22px;", checkboxInput("circle_show_edge_label", "Show edge label", value = FALSE))),
+        column(3, div(style = "padding-top: 22px;", checkboxInput("circle_remove_isolate", "Remove isolated cell groups", value = FALSE)))
       ),
       
       fluidRow(
@@ -2693,7 +2693,57 @@ server <- function(input, output, session) {
     )
   })
   
-  
+  output$netAnalysis_contribution_ui <- renderUI({
+    
+    tagList(
+      
+      div(
+        style = "display: flex; justify-content: center;",
+        uiOutput("netAnalysis_contribution_control")
+      ),
+      fluidRow(
+        column(3, numericInput("netAnalysis_contribution_x_text_size", "X-axis text size", value = 12)),
+        column(3, numericInput("netAnalysis_contribution_lr_pair_size", "L-R pair text size", value = 12)),
+        column(3, numericInput("netAnalysis_contribution_title_size", "Title size", value = 10)),
+        column(3, div(style = "padding-top: 22px;", checkboxInput("netAnalysis_contribution_show_value", "Show bar values", value = FALSE)))
+      ),
+      fluidRow(
+        column(3, numericInput("netAnalysis_contribution_width", "PDF width (inch)", value = if (is.null(rv$cccd_obj$data_merge)) {6} else {12})),
+        column(3, numericInput("netAnalysis_contribution_height", "PDF height (inch)", value = 5))
+      ),
+      
+      fluidRow(
+        column(
+          12,
+          textInput(
+            "netAnalysis_contribution_save_path",
+            "Output directory",
+            value = file.path(rv$save_path, "CellCellCommunication"),
+            width = "100%"
+          )
+        )
+      ),
+      
+      fluidRow(
+        column(
+          6,
+          actionButton(
+            "save_netAnalysis_contribution",
+            "Save Graph on SCC",
+            style = "background-color: #87cefa; color: white; width: 100%;"
+          )
+        ),
+        column(
+          6,
+          downloadButton(
+            "download_netAnalysis_contribution",
+            "Download Plot to Local",
+            style = "background-color: #4CAF50; color: white; width: 100%;"
+          )
+        )
+      )
+    )
+  })
   # ----------------- Cell Cell Communication UI - LRpair-----------------
   output$ccc_pair_control_ui <- renderUI({
     NULL
@@ -8891,7 +8941,6 @@ server <- function(input, output, session) {
     }
   )
   # ----------------- VISUALIZATION FUNCTION Cell Cell Communication netVisual_heatmap -----------------
-  
   netVisual_heatmap_reactive <- reactive({
     
     req(rv$cccd_obj)
@@ -8902,16 +8951,12 @@ server <- function(input, output, session) {
     req(input$netVisual_heatmap_legend_size)
     req(!rv$ui_freeze)
     
-    cellchat_obj   <- rv$cccd_obj$data
+    cellchat_obj <- rv$cccd_obj$data
     cellchat_merge <- rv$cccd_obj$data_merge
-    
     signaling_use <- trimws(rv$ccc_pathway_select)
     
     if (is.null(signaling_use) || signaling_use == "") {
-      return(list(
-        type = "message",
-        content = "Please select a pathway first."
-      ))
+      return(list(type = "message", content = "Please select a pathway first."))
     }
     
     is_cellchat_obj <- function(x) {
@@ -8922,14 +8967,33 @@ server <- function(input, output, session) {
       if (is.null(obj)) return(FALSE)
       if (!is_cellchat_obj(obj)) return(FALSE)
       if (is.null(obj@netP$pathways)) return(FALSE)
-      
       signaling_use %in% trimws(obj@netP$pathways)
+    }
+    
+    make_message_grob <- function(msg) {
+      grid::grobTree(
+        grid::rectGrob(gp = grid::gpar(col = NA, fill = "white")),
+        grid::textGrob(
+          msg,
+          x = 0.5,
+          y = 0.5,
+          gp = grid::gpar(
+            col = "red",
+            fontsize = input$netVisual_heatmap_axis_text_size + 4
+          )
+        )
+      )
     }
     
     make_pathway_heatmap <- function(obj, dataset_name = NULL) {
       
       if (!pathway_exists(obj)) {
-        return(NULL)
+        msg <- paste0(
+          "Pathway '", signaling_use, "' is not found",
+          if (!is.null(dataset_name)) paste0(" in ", dataset_name) else "",
+          "."
+        )
+        return(make_message_grob(msg))
       }
       
       title_use <- if (is.null(dataset_name)) {
@@ -8947,34 +9011,13 @@ server <- function(input, output, session) {
         font.size = input$netVisual_heatmap_axis_text_size
       )
       
-      ht@row_names_param$gp <- grid::gpar(
-        fontsize = input$netVisual_heatmap_axis_text_size
-      )
+      ht@row_names_param$gp <- grid::gpar(fontsize = input$netVisual_heatmap_axis_text_size)
+      ht@column_names_param$gp <- grid::gpar(fontsize = input$netVisual_heatmap_axis_text_size)
+      ht@row_title_param$gp <- grid::gpar(fontsize = input$netVisual_heatmap_axis_title_size)
+      ht@column_title_param$gp <- grid::gpar(fontsize = input$netVisual_heatmap_axis_title_size)
+      ht@matrix_legend_param$title_gp <- grid::gpar(fontsize = input$netVisual_heatmap_legend_size)
+      ht@matrix_legend_param$labels_gp <- grid::gpar(fontsize = input$netVisual_heatmap_legend_size)
       
-      ht@column_names_param$gp <- grid::gpar(
-        fontsize = input$netVisual_heatmap_axis_text_size
-      )
-      
-      ht@row_title_param$gp <- grid::gpar(
-        fontsize = input$netVisual_heatmap_axis_title_size
-      )
-      
-      ht@column_title_param$gp <- grid::gpar(
-        fontsize = input$netVisual_heatmap_axis_title_size
-      )
-      
-      ht@matrix_legend_param$title_gp <- grid::gpar(
-        fontsize = input$netVisual_heatmap_legend_size
-      )
-      
-      ht@matrix_legend_param$labels_gp <- grid::gpar(
-        fontsize = input$netVisual_heatmap_legend_size
-      )
-      
-      ht
-    }
-    
-    draw_heatmap_to_grob <- function(ht) {
       grid::grid.grabExpr({
         ComplexHeatmap::draw(ht)
       })
@@ -8991,108 +9034,48 @@ server <- function(input, output, session) {
         ))
       }
       
-      object.list <- object.list[
-        sapply(object.list, is_cellchat_obj)
-      ]
+      object.list <- object.list[sapply(object.list, is_cellchat_obj)]
       
       if (length(object.list) == 0) {
-        return(list(
-          type = "message",
-          content = "No valid CellChat object was found in the object list."
-        ))
+        return(list(type = "message", content = "No valid CellChat object was found in the object list."))
       }
       
       dataset_use <- names(object.list)[1:min(2, length(object.list))]
       
-      ht_list <- lapply(dataset_use, function(dataset_name) {
-        
+      grob_list <- lapply(dataset_use, function(dataset_name) {
         make_pathway_heatmap(
           obj = object.list[[dataset_name]],
           dataset_name = dataset_name
         )
-        
       })
       
-      ht_list <- ht_list[!sapply(ht_list, is.null)]
-      
-      if (length(ht_list) == 0) {
-        
-        pathway_info <- paste(
-          unique(unlist(lapply(object.list, function(x) x@netP$pathways))),
-          collapse = ", "
-        )
-        
-        return(list(
-          type = "message",
-          content = paste0(
-            "Pathway '",
-            signaling_use,
-            "' is not found in selected datasets.\n",
-            "Available pathways include: ",
-            pathway_info
-          )
-        ))
-      }
-      
-      grob_list <- lapply(ht_list, draw_heatmap_to_grob)
-      
       plot_fun <- function() {
-        
         combined_grob <- gridExtra::arrangeGrob(
           grobs = grob_list,
-          nrow = 1
+          nrow = 1,
+          ncol = length(dataset_use)
         )
         
         grid::grid.newpage()
         grid::grid.draw(combined_grob)
-        
         invisible(NULL)
       }
       
     } else {
       
-      ht <- make_pathway_heatmap(
+      grob_use <- make_pathway_heatmap(
         obj = cellchat_obj,
         dataset_name = NULL
       )
       
-      if (is.null(ht)) {
-        
-        pathway_info <- paste(
-          cellchat_obj@netP$pathways,
-          collapse = ", "
-        )
-        
-        return(list(
-          type = "message",
-          content = paste0(
-            "Pathway '",
-            signaling_use,
-            "' is not found.\n",
-            "Available pathways include: ",
-            pathway_info
-          )
-        ))
-      }
-      
       plot_fun <- function() {
-        
         grid::grid.newpage()
-        
-        ComplexHeatmap::draw(
-          ht,
-          newpage = FALSE
-        )
-        
+        grid::grid.draw(grob_use)
         invisible(NULL)
       }
     }
     
-    list(
-      type = "plot",
-      plot_fun = plot_fun
-    )
-    
+    list(type = "plot", plot_fun = plot_fun)
   })
   
   output$netVisual_heatmap_control <- renderUI({
@@ -9253,9 +9236,7 @@ server <- function(input, output, session) {
   )
   
 
-  # ----------------- VISUALIZATION FUNCTION Cell Cell Communication netAnalysis_signalingRole_network -----------------
   # ----------------- REACTIVE Cell Cell Communication netAnalysis_signalingRole_network -----------------
-  
   netAnalysis_signalingRole_network_reactive <- reactive({
     
     req(rv$cccd_obj)
@@ -9270,10 +9251,7 @@ server <- function(input, output, session) {
     signaling_use <- trimws(rv$ccc_pathway_select)
     
     if (is.null(signaling_use) || signaling_use == "") {
-      return(list(
-        type = "message",
-        content = "Please select and confirm a pathway first."
-      ))
+      return(list(type = "message", content = "Please select and confirm a pathway first."))
     }
     
     is_cellchat_obj <- function(x) {
@@ -9287,23 +9265,44 @@ server <- function(input, output, session) {
       signaling_use %in% trimws(obj@netP$pathways)
     }
     
+    make_message_grob <- function(msg) {
+      grid::grobTree(
+        grid::rectGrob(gp = grid::gpar(col = NA, fill = "white")),
+        grid::textGrob(
+          msg,
+          x = 0.5,
+          y = 0.5,
+          gp = grid::gpar(
+            col = "red",
+            fontsize = input$netAnalysis_signalingRole_network_font_size + 4
+          )
+        )
+      )
+    }
+    
     draw_single_network <- function(obj, dataset_name = NULL) {
       
       if (!pathway_exists(obj)) {
-        return(NULL)
+        msg <- paste0(
+          "Pathway '", signaling_use, "' is not found",
+          if (!is.null(dataset_name)) paste0(" in ", dataset_name) else "",
+          "."
+        )
+        return(make_message_grob(msg))
       }
       
       grid::grid.grabExpr({
-        
-        grid::grid.newpage()
-        
         netAnalysis_signalingRole_network(
           obj,
           signaling = signaling_use,
           slot.name = "netP",
           color.heatmap = input$netAnalysis_signalingRole_network_color,
-          width = if(!is.null(rv$cccd_obj$data_merge)){input$netAnalysis_signalingRole_network_width/2}else{input$netAnalysis_signalingRole_network_width},
-          height = input$netAnalysis_signalingRole_network_height-1,
+          width = if (!is.null(rv$cccd_obj$data_merge)) {
+            input$netAnalysis_signalingRole_network_width / 2
+          } else {
+            input$netAnalysis_signalingRole_network_width
+          },
+          height = input$netAnalysis_signalingRole_network_height - 1,
           font.size = input$netAnalysis_signalingRole_network_font_size,
           font.size.title = input$netAnalysis_signalingRole_network_title_size
         )
@@ -9333,15 +9332,10 @@ server <- function(input, output, session) {
         ))
       }
       
-      object.list <- object.list[
-        sapply(object.list, is_cellchat_obj)
-      ]
+      object.list <- object.list[sapply(object.list, is_cellchat_obj)]
       
       if (length(object.list) == 0) {
-        return(list(
-          type = "message",
-          content = "No valid CellChat object was found in the object list."
-        ))
+        return(list(type = "message", content = "No valid CellChat object was found in the object list."))
       }
       
       dataset_use <- names(object.list)[1:min(2, length(object.list))]
@@ -9353,28 +9347,11 @@ server <- function(input, output, session) {
         )
       })
       
-      grob_list <- grob_list[!sapply(grob_list, is.null)]
-      
-      if (length(grob_list) == 0) {
-        pathway_info <- paste(
-          unique(unlist(lapply(object.list, function(x) x@netP$pathways))),
-          collapse = ", "
-        )
-        
-        return(list(
-          type = "message",
-          content = paste0(
-            "Pathway '", signaling_use, "' is not found in selected datasets.\n",
-            "Available pathways include: ", pathway_info
-          )
-        ))
-      }
-      
       plot_fun <- function() {
         combined_grob <- gridExtra::arrangeGrob(
           grobs = grob_list,
           nrow = 1,
-          ncol = length(grob_list)
+          ncol = length(dataset_use)
         )
         
         grid::grid.newpage()
@@ -9384,39 +9361,19 @@ server <- function(input, output, session) {
       
     } else {
       
-      if (!pathway_exists(cellchat_obj)) {
-        pathway_info <- paste(cellchat_obj@netP$pathways, collapse = ", ")
-        
-        return(list(
-          type = "message",
-          content = paste0(
-            "Pathway '", signaling_use, "' is not found.\n",
-            "Available pathways include: ", pathway_info
-          )
-        ))
-      }
+      grob_use <- draw_single_network(
+        obj = cellchat_obj,
+        dataset_name = NULL
+      )
       
       plot_fun <- function() {
-        
-        netAnalysis_signalingRole_network(
-          cellchat_obj,
-          signaling = signaling_use,
-          slot.name = "netP",
-          color.heatmap = input$netAnalysis_signalingRole_network_color,
-          width = if(!is.null(rv$cccd_obj$data_merge)){input$netAnalysis_signalingRole_network_width/2}else{input$netAnalysis_signalingRole_network_width},
-          height = input$netAnalysis_signalingRole_network_height-1,
-          font.size = input$netAnalysis_signalingRole_network_font_size,
-          font.size.title = input$netAnalysis_signalingRole_network_title_size
-        )
-        
+        grid::grid.newpage()
+        grid::grid.draw(grob_use)
         invisible(NULL)
       }
     }
     
-    list(
-      type = "plot",
-      plot_fun = plot_fun
-    )
+    list(type = "plot", plot_fun = plot_fun)
   })
   
   output$netAnalysis_signalingRole_network_control <- renderUI({
@@ -9540,6 +9497,328 @@ server <- function(input, output, session) {
     }
   )
   
+  # ----------------- REACTIVE Cell Cell Communication netAnalysis_contribution -----------------
+  netAnalysis_contribution_reactive <- reactive({
+    
+    req(rv$cccd_obj)
+    req(rv$ccc_pathway_select)
+    req(input$netAnalysis_contribution_x_text_size)
+    req(input$netAnalysis_contribution_lr_pair_size)
+    req(input$netAnalysis_contribution_title_size)
+    req(!rv$ui_freeze)
+    
+    cellchat_obj <- rv$cccd_obj$data
+    cellchat_merge <- rv$cccd_obj$data_merge
+    signaling_use <- trimws(rv$ccc_pathway_select)
+    
+    if (is.null(signaling_use) || signaling_use == "") {
+      return(list(
+        type = "message",
+        content = "Please select and confirm a pathway first."
+      ))
+    }
+    
+    is_cellchat_obj <- function(x) {
+      methods::is(x, "CellChat")
+    }
+    
+    pathway_exists <- function(obj) {
+      if (is.null(obj)) return(FALSE)
+      if (!is_cellchat_obj(obj)) return(FALSE)
+      if (is.null(obj@netP$pathways)) return(FALSE)
+      signaling_use %in% trimws(obj@netP$pathways)
+    }
+    
+    make_message_grob <- function(msg) {
+      grid::grobTree(
+        grid::rectGrob(
+          gp = grid::gpar(col = NA, fill = "white")
+        ),
+        grid::textGrob(
+          msg,
+          x = 0.5,
+          y = 0.5,
+          gp = grid::gpar(
+            col = "red",
+            fontsize = input$netAnalysis_contribution_font_size + 4
+          )
+        )
+      )
+    }
+    
+    make_contribution_grob <- function(obj, dataset_name = NULL) {
+      
+      if (!pathway_exists(obj)) {
+        msg <- paste0(
+          "Pathway '", signaling_use, "' is not found",
+          if (!is.null(dataset_name)) paste0(" in ", dataset_name) else "",
+          "."
+        )
+        return(make_message_grob(msg))
+      }
+      
+      title_use <- if (is.null(dataset_name)) {
+        paste0(signaling_use, " signaling contribution")
+      } else {
+        paste0(signaling_use, " signaling contribution - ", dataset_name)
+      }
+      
+      p0 <- netAnalysis_contribution(
+        obj,
+        signaling = signaling_use
+      )
+      
+      plot_df <- p0$data
+      
+      plot_df <- plot_df[
+        plot_df$contribution > 1e-10 &
+          !is.na(plot_df$name) &
+          !grepl("^[0-9]+$", as.character(plot_df$name)),
+      ]
+      
+      plot_df$name <- factor(
+        plot_df$name,
+        levels = rev(as.character(plot_df$name))
+      )
+      
+      p <- ggplot2::ggplot(
+        plot_df,
+        ggplot2::aes(
+          x = contribution,
+          y = name
+        )
+      ) +
+        ggplot2::geom_col(
+          fill = "gray35",
+          width = 0.7
+        ) +
+        ggplot2::labs(
+          title = title_use,
+          x = "Relative contribution",
+          y = NULL
+        ) +
+        ggplot2::theme_classic() +
+        ggplot2::theme(
+          plot.title = ggplot2::element_text(
+            size = input$netAnalysis_contribution_title_size,
+            face = "bold",
+            hjust = 0.5
+          ),
+          axis.title.x = ggplot2::element_text(
+            size = input$netAnalysis_contribution_x_text_size
+          ),
+          axis.text.x = ggplot2::element_text(
+            size = input$netAnalysis_contribution_x_text_size
+          ),
+          axis.text.y = ggplot2::element_text(
+            size = input$netAnalysis_contribution_lr_pair_size
+          )
+        )
+      
+      if (isTRUE(input$netAnalysis_contribution_show_value)) {
+        p <- p +
+          ggplot2::geom_text(
+            ggplot2::aes(
+              x = contribution + 0.01,
+              label = scales::number(contribution, accuracy = 0.001)
+            ),
+            hjust = 0
+          ) +
+          ggplot2::coord_cartesian(
+            xlim = c(0, max(plot_df$contribution, na.rm = TRUE) * 1.15)
+          )
+      }
+      
+      ggplot2::ggplotGrob(p)
+      
+      ggplot2::ggplotGrob(p)
+    }
+    
+    if (!is.null(cellchat_merge)) {
+      
+      object.list <- cellchat_obj
+      
+      if (!is.list(object.list) || length(object.list) < 2) {
+        return(list(
+          type = "message",
+          content = "The uploaded file has a merged CellChat object, but the original object list is not available."
+        ))
+      }
+      
+      object.list <- object.list[
+        sapply(object.list, is_cellchat_obj)
+      ]
+      
+      if (length(object.list) == 0) {
+        return(list(
+          type = "message",
+          content = "No valid CellChat object was found in the object list."
+        ))
+      }
+      
+      dataset_use <- names(object.list)[1:min(2, length(object.list))]
+      
+      grob_list <- lapply(dataset_use, function(dataset_name) {
+        make_contribution_grob(
+          obj = object.list[[dataset_name]],
+          dataset_name = dataset_name
+        )
+      })
+      
+      plot_fun <- function() {
+        combined_grob <- gridExtra::arrangeGrob(
+          grobs = grob_list,
+          nrow = 1,
+          ncol = length(grob_list)
+        )
+        
+        grid::grid.newpage()
+        grid::grid.draw(combined_grob)
+        invisible(NULL)
+      }
+      
+    } else {
+      
+      grob_use <- make_contribution_grob(
+        obj = cellchat_obj,
+        dataset_name = NULL
+      )
+      
+      plot_fun <- function() {
+        grid::grid.newpage()
+        grid::grid.draw(grob_use)
+        invisible(NULL)
+      }
+    }
+    
+    list(
+      type = "plot",
+      plot_fun = plot_fun
+    )
+  })
+  
+  output$netAnalysis_contribution_control <- renderUI({
+    
+    has_merge <- !is.null(rv$cccd_obj$data_merge)
+    
+    width_val <- if (has_merge) {
+      "900px"
+    } else {
+      "450px"
+    }
+    
+    div(
+      style = "max-width: 800px; overflow-x: auto; width: 100%;",
+      plotOutput(
+        "netAnalysis_contribution_plot",
+        height = "400px",
+        width = width_val
+      )
+    )
+  })
+  
+  
+  output$netAnalysis_contribution_plot <- renderPlot({
+    
+    req(netAnalysis_contribution_reactive())
+    req(!rv$ui_freeze)
+    
+    res <- netAnalysis_contribution_reactive()
+    
+    if (is.list(res) && res$type == "message") {
+      plot.new()
+      text(0.5, 0.5, res$content, cex = 1.2, col = "red")
+      return()
+    }
+    
+    res$plot_fun()
+  })
+  
+  observeEvent(input$save_netAnalysis_contribution, {
+    
+    req(netAnalysis_contribution_reactive())
+    req(input$netAnalysis_contribution_save_path)
+    
+    res <- netAnalysis_contribution_reactive()
+    
+    if (is.list(res) && res$type == "message") {
+      showNotification(res$content, type = "error")
+      return()
+    }
+    
+    out_dir <- input$netAnalysis_contribution_save_path
+    
+    if (!dir.exists(out_dir)) {
+      dir.create(out_dir, recursive = TRUE)
+    }
+    
+    out_file <- file.path(
+      out_dir,
+      paste0(
+        "LRContribution_",
+        rv$ccc_pathway_select,
+        "_",
+        format(Sys.time(), "%Y%m%d_%H%M%S"),
+        ".pdf"
+      )
+    )
+    
+    pdf(
+      out_file,
+      width = input$netAnalysis_contribution_width,
+      height = input$netAnalysis_contribution_height
+    )
+    
+    res$plot_fun()
+    
+    dev.off()
+    
+    showNotification(
+      paste0("Saved L-R contribution plot: ", out_file),
+      type = "message"
+    )
+  })
+  
+  output$download_netAnalysis_contribution <- downloadHandler(
+    
+    filename = function() {
+      paste0(
+        "LRContribution_",
+        rv$ccc_pathway_select,
+        "_",
+        format(Sys.time(), "%Y%m%d_%H%M%S"),
+        ".pdf"
+      )
+    },
+    
+    content = function(file) {
+      
+      req(netAnalysis_contribution_reactive())
+      
+      res <- netAnalysis_contribution_reactive()
+      
+      pdf(
+        file,
+        width = input$netAnalysis_contribution_width,
+        height = input$netAnalysis_contribution_height
+      )
+      
+      if (is.list(res) && res$type == "message") {
+        plot.new()
+        text(0.5, 0.5, res$content, cex = 1.2, col = "red")
+      } else {
+        res$plot_fun()
+      }
+      
+      dev.off()
+      
+      showNotification(
+        "L-R contribution plot downloaded successfully.",
+        type = "message",
+        duration = 3
+      )
+    }
+  )
   # ----------------- Data Output Gene expression -----------------
   output$gene_expression_sub_ui <- renderUI({
     
