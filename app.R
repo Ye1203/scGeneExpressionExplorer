@@ -1632,7 +1632,7 @@ server <- function(input, output, session) {
     )
   })
   
-  # ----------------- Violin plot UI, Check whether data_obj exist (copy) -----------------
+  # ----------------- Violin plot UI, Check whether data_obj exist -----------------
   output$violin_plot_tabs_ui <- renderUI({
     
     if (is.null(rv$data_obj) | rv$visualization_marker == "" | rv$visualization_sample_column == "") {
@@ -2746,7 +2746,88 @@ server <- function(input, output, session) {
   })
   # ----------------- Cell Cell Communication UI - LRpair-----------------
   output$ccc_pair_control_ui <- renderUI({
-    NULL
+    
+    tagList(
+      actionButton(
+        "select_lr_pair",
+        "Select L-R pair for analysis",
+        class = "btn-success",
+        style = "width: 100%;"
+      ),
+      
+      if (!is.null(rv$ccc_lr_pair_select) &&
+          length(rv$ccc_lr_pair_select) > 0 &&
+          any(trimws(rv$ccc_lr_pair_select) != "")) {
+        uiOutput("netVisual_individual_ui")
+      } else {
+        
+        div(
+          style = "padding: 15px; background-color: #fff3cd; border: 1px solid #ffeeba; border-radius: 5px;",
+          "Please select one or more L-R pairs first."
+        )
+        
+      }
+    )
+  })
+  
+  output$netVisual_individual_ui <- renderUI({
+    
+    tagList(
+      
+      div(
+        style = "display: flex; justify-content: center;",
+        uiOutput("netVisual_individual_control")
+      ),
+      
+      fluidRow(
+        column(3, numericInput("individual_vertex_label_size", "Vertex label size", value = 1)),
+        column(3, numericInput("individual_edge_width_max", "Max edge width", value = 8)),
+        column(3, numericInput("individual_arrow_size", "Arrow size", value = 0.2))
+      ),
+      
+      fluidRow(
+        column(
+          3,
+          numericInput(
+            "individual_width",
+            "PDF width (inch)",
+            value = if (is.null(rv$cccd_obj$data_merge)) 6 else 12
+          )
+        ),
+        column(3, numericInput("individual_height", "PDF height (inch)", value = 6))
+      ),
+      
+      fluidRow(
+        column(
+          12,
+          textInput(
+            "individual_save_path",
+            "Output directory",
+            value = file.path(rv$save_path, "CellCellCommunication"),
+            width = "100%"
+          )
+        )
+      ),
+      
+      fluidRow(
+        column(
+          6,
+          actionButton(
+            "generate_netVisual_individual",
+            "Generate Graph to Save Folder",
+            style = "background-color: #87cefa; color: white; width: 100%;"
+          )
+        ),
+        column(
+          6,
+          downloadButton(
+            "download_netVisual_individual",
+            "Download Generated Graphs",
+            style = "background-color: #4CAF50; color: white; width: 100%;"
+          )
+        )
+      )
+    )
   })
   # ----------------- Cell Cell Communication Comparison UI - overall-----------------
   output$cccc_overall_control_ui <- renderUI({
@@ -5158,6 +5239,549 @@ server <- function(input, output, session) {
     
     rv$ccc_pathway_select <- pathway
     rv$ui_freeze = FALSE
+    removeModal()
+  })
+  
+  # ----------------- VISUALIZATION FUNCTION CCC l-R pair Select -----------------
+  observeEvent(input$select_lr_pair, {
+    open_lr_pair_modal(input$ccc_pair_active_tab)
+  })
+  
+  open_lr_pair_modal <- function(target = NULL) {
+    
+    rv$ui_freeze <- TRUE
+    
+    target <- input$ccc_pair_active_tab
+    
+    if (is.null(target) || target == "") {
+      target <- "netVisual_individual"
+    }
+    
+    rv$ccc_lr_pair_select_target <- target
+    
+    if (is.null(rv$ccc_lr_pair_select)) {
+      rv$ccc_lr_pair_select <- character(0)
+    }
+    
+    
+    showModal(
+      modalDialog(
+        title = "Select L-R pair",
+        size = "l",
+        easyClose = FALSE,
+        
+        fluidRow(
+          column(
+            width = 6,
+            
+            textAreaInput(
+              inputId = "ccc_lr_pair_text",
+              label = "Selected L-R pairs:",
+              value = paste(unique(rv$ccc_lr_pair_select), collapse = "\n"),
+              rows = 20,
+              placeholder = "Selected L-R pairs will appear here...",
+              width = "100%"
+            ),
+            
+            actionButton(
+              "clear_ccc_lr_pair",
+              "Clear All L-R pairs",
+              class = "btn-danger",
+              width = "100%"
+            )
+          ),
+          
+          column(
+            width = 6,
+            
+            tags$div(
+              style = "margin-bottom: 10px; display: flex; align-items: center; gap: 6px;",
+              tags$span("Current Number of Unique L-R pairs:"),
+              tags$span(
+                style = "color: red; font-weight: bold;",
+                textOutput("ccc_lr_pair_count")
+              )
+            ),
+            
+            tags$hr(),
+            actionButton(
+              "use_pathway_lr_pair_btn",
+              "Use pathway to select L-R pairs",
+              class = "btn btn-primary",
+              width = "100%"
+            ),
+            
+            tags$hr(),
+            
+            actionButton(
+              "use_net_lr_pair_btn",
+              "Use communication table to select L-R pairs",
+              class = "btn btn-primary",
+              width = "100%"
+            ),
+            
+            tags$hr(),
+            
+            uiOutput("ccc_lr_annotation_filter_ui"),
+            
+            fluidRow(
+              column(
+                width = 8,
+                numericInput(
+                  "ccc_lr_pvalue_threshold",
+                  "L-R p-value < threshold:",
+                  value = 0.01
+                )
+              ),
+              column(
+                width = 4,
+                br(),
+                actionButton(
+                  "apply_ccc_lr_pvalue",
+                  "Apply",
+                  class = "btn btn-success",
+                  width = "100%"
+                )
+              )
+            ),
+            
+            fluidRow(
+              column(
+                width = 8,
+                numericInput(
+                  "ccc_lr_prob_threshold",
+                  "L-R probability > threshold:",
+                  value = 0.1
+                )
+              ),
+              column(
+                width = 4,
+                br(),
+                actionButton(
+                  "apply_ccc_lr_prob",
+                  "Apply",
+                  class = "btn btn-success",
+                  width = "100%"
+                )
+              )
+            )
+          )
+        ),
+        
+        footer = tagList(
+          actionButton("close_modal", "Close"),
+          actionButton(
+            "confirm_lr_pair_select",
+            "Confirm",
+            class = "btn-success"
+          )
+        )
+      )
+    )
+  }
+  
+  get_current_lr_pairs <- function() {
+    
+    if (is.null(rv$ccc_lr_pair_select)) {
+      return(character(0))
+    }
+    
+    x <- rv$ccc_lr_pair_select
+    x <- trimws(x)
+    x <- x[x != ""]
+    unique(x)
+  }
+  
+  update_lr_pair_text <- function(session) {
+    
+    updateTextAreaInput(
+      session,
+      "ccc_lr_pair_text",
+      value = paste(get_current_lr_pairs(), collapse = "\n")
+    )
+  }
+  
+  extract_lr_pair_name <- function(df) {
+    if ("interaction_name" %in% colnames(df)) {
+      return(as.character(df$interaction_name))
+    }
+    
+    if ("interaction_name_2" %in% colnames(df)) {
+      return(as.character(df$interaction_name_2))
+    }
+    stop("Cannot find L-R pair name column.")
+  }
+  
+  get_net_lr_table <- function() {
+    
+    req(rv$cccd_obj)
+    
+    obj <- rv$cccd_obj$data
+    
+    clean_one_table <- function(df, dataset_name = NULL) {
+      
+      df$lr_pair <- extract_lr_pair_name(df)
+      
+      if ("pathway_name" %in% colnames(df)) {
+        df$pathway <- df$pathway_name
+      } else if (!("pathway" %in% colnames(df))) {
+        df$pathway <- NA
+      }
+      
+      if (!is.null(dataset_name)) {
+        df$dataset <- dataset_name
+      }
+      
+      remove_cols <- intersect(
+        c("interaction_name", "interaction_name_2", "pathway_name"),
+        colnames(df)
+      )
+      
+      df <- df[, !(colnames(df) %in% remove_cols), drop = FALSE]
+      
+      first_cols <- if (!is.null(dataset_name)) {
+        c("lr_pair", "pathway", "dataset")
+      } else {
+        c("lr_pair", "pathway")
+      }
+      
+      other_cols <- setdiff(colnames(df), first_cols)
+      
+      df <- df[, c(first_cols, other_cols), drop = FALSE]
+      
+      df
+    }
+    
+    if (!is.null(rv$cccd_obj$data_merge)) {
+      
+      object.list <- obj
+      object.list <- object.list[
+        sapply(object.list, function(x) methods::is(x, "CellChat"))
+      ]
+      
+      dataset_use <- names(object.list)
+      
+      df_list <- lapply(dataset_use, function(dataset_name) {
+        df <- subsetCommunication(object.list[[dataset_name]])
+        clean_one_table(df, dataset_name = dataset_name)
+      })
+      
+      df <- do.call(rbind, df_list)
+      
+    } else {
+      
+      df <- subsetCommunication(obj)
+      df <- clean_one_table(df, dataset_name = NULL)
+    }
+    
+    rownames(df) <- NULL
+    df
+  }
+  
+  output$ccc_lr_pair_count <- renderText({
+    length(get_current_lr_pairs())
+  })
+  
+  observeEvent(input$ccc_lr_pair_text, {
+    
+    x <- unlist(strsplit(input$ccc_lr_pair_text, "\n"))
+    x <- trimws(x)
+    x <- x[x != ""]
+    
+    rv$ccc_lr_pair_select <- unique(x)
+    
+  }, ignoreInit = TRUE)
+  
+  observeEvent(input$clear_ccc_lr_pair, {
+    
+    rv$ccc_lr_pair_select <- character(0)
+    
+    updateTextAreaInput(
+      session,
+      "ccc_lr_pair_text",
+      value = ""
+    )
+  })
+  
+  observeEvent(input$use_net_lr_pair_btn, {
+    
+    showModal(
+      modalDialog(
+        title = "Select L-R pairs from communication table",
+        size = "l",
+        easyClose = FALSE,
+        
+        DT::DTOutput("ccc_net_lr_pair_table"),
+        
+        footer = tagList(
+          actionButton(
+            "confirm_net_lr_pair_select",
+            "Confirm Selection",
+            class = "btn btn-primary"
+          ),
+          actionButton("back_to_lr_pair_modal_from_net", "Back")
+        )
+      )
+    )
+  })
+  
+  output$ccc_net_lr_pair_table <- DT::renderDT({
+    
+    df <- get_net_lr_table()
+    
+    selected_pairs <- get_current_lr_pairs()
+    
+    selected_idx <- which(df$lr_pair %in% selected_pairs)
+    
+    dt <- DT::datatable(
+      df,
+      class = "compact stripe hover nowrap",
+      selection = list(
+        mode = "multiple",
+        selected = selected_idx
+      ),
+      filter = "top",
+      options = list(
+        pageLength = 15,
+        lengthMenu = list(
+          c(10, 15, 20, 30, 50),
+          c("10", "15", "20", "30", "50")
+        ),
+        scrollX = TRUE,
+        autoWidth = TRUE
+      )
+    )
+    
+    if ("prob" %in% colnames(df)) {
+      dt <- DT::formatRound(dt, "prob", 3)
+    }
+    
+    dt
+  })
+  
+  
+  observeEvent(input$confirm_net_lr_pair_select, {
+    
+    df <- get_net_lr_table()
+    sel_idx <- input$ccc_net_lr_pair_table_rows_selected
+    
+    if (!is.null(sel_idx) && length(sel_idx) > 0) {
+      selected_pairs <- unique(df$lr_pair[sel_idx])
+      
+      rv$ccc_lr_pair_select <- unique(c(
+        get_current_lr_pairs(),
+        selected_pairs
+      ))
+    }
+    
+    removeModal()
+    open_lr_pair_modal(rv$ccc_lr_pair_select_target)
+  })
+  
+  
+  observeEvent(input$back_to_lr_pair_modal_from_net, {
+    removeModal()
+    open_lr_pair_modal(rv$ccc_lr_pair_select_target)
+  })
+  
+  observeEvent(input$use_pathway_lr_pair_btn, {
+    
+    showModal(
+      modalDialog(
+        title = "Select L-R pairs by pathway",
+        size = "l",
+        easyClose = FALSE,
+        
+        selectInput(
+          "ccc_lr_pathway_select",
+          "Select pathway:",
+          choices = get_available_pathways_for_lr(),
+          selected = rv$ccc_pathway_select
+        ),
+        
+        tags$hr(),
+        
+        uiOutput("ccc_pathway_lr_pair_checkbox_ui"),
+        
+        footer = tagList(
+          actionButton(
+            "confirm_pathway_lr_pair_select",
+            "Confirm Selection",
+            class = "btn btn-primary"
+          ),
+          actionButton("back_to_lr_pair_modal_from_pathway", "Back")
+        )
+      )
+    )
+  })
+  
+  get_available_pathways_for_lr <- function() {
+    
+    req(rv$cccd_obj)
+    
+    obj <- rv$cccd_obj$data
+    
+    if (!is.null(rv$cccd_obj$data_merge)) {
+      object.list <- obj
+      object.list <- object.list[
+        sapply(object.list, function(x) methods::is(x, "CellChat"))
+      ]
+      
+      pathways <- unique(unlist(lapply(object.list, function(x) {
+        if (!is.null(x@netP$pathways)) x@netP$pathways else character(0)
+      })))
+      
+    } else {
+      pathways <- obj@netP$pathways
+    }
+    
+    sort(unique(pathways))
+  }
+  
+  
+  get_lr_pairs_by_pathway <- function(pathway_use) {
+    
+    req(rv$cccd_obj)
+    
+    obj <- rv$cccd_obj$data
+    
+    if (!is.null(rv$cccd_obj$data_merge)) {
+      
+      object.list <- obj
+      object.list <- object.list[
+        sapply(object.list, function(x) methods::is(x, "CellChat"))
+      ]
+      
+      df_list <- lapply(object.list, function(x) {
+        if (!(pathway_use %in% x@netP$pathways)) {
+          return(NULL)
+        }
+        
+        df <- subsetCommunication(
+          x,
+          signaling = pathway_use
+        )
+        
+        if (is.null(df) || nrow(df) == 0) {
+          return(NULL)
+        }
+        
+        df$lr_pair <- extract_lr_pair_name(df)
+        df
+      })
+      
+      df <- do.call(rbind, df_list[!sapply(df_list, is.null)])
+      
+    } else {
+      
+      if (!(pathway_use %in% obj@netP$pathways)) {
+        return(character(0))
+      }
+      
+      df <- subsetCommunication(
+        obj,
+        signaling = pathway_use
+      )
+      
+      if (is.null(df) || nrow(df) == 0) {
+        return(character(0))
+      }
+      
+      df$lr_pair <- extract_lr_pair_name(df)
+    }
+    
+    unique(df$lr_pair)
+  }
+  
+  
+  output$ccc_pathway_lr_pair_checkbox_ui <- renderUI({
+    
+    req(input$ccc_lr_pathway_select)
+    
+    lr_pairs <- get_lr_pairs_by_pathway(input$ccc_lr_pathway_select)
+    
+    if (length(lr_pairs) == 0) {
+      return(
+        div(
+          style = "padding: 15px; color: red;",
+          paste0("No L-R pairs found for pathway: ", input$ccc_lr_pathway_select)
+        )
+      )
+    }
+    
+    checkboxGroupInput(
+      "ccc_pathway_lr_pair_select",
+      "Select L-R pairs:",
+      choices = lr_pairs,
+      selected = lr_pairs
+    )
+  })
+  
+  
+  observeEvent(input$confirm_pathway_lr_pair_select, {
+    
+    selected_pairs <- input$ccc_pathway_lr_pair_select
+    
+    if (!is.null(selected_pairs) && length(selected_pairs) > 0) {
+      rv$ccc_lr_pair_select <- unique(c(
+        get_current_lr_pairs(),
+        selected_pairs
+      ))
+    }
+    
+    removeModal()
+    open_lr_pair_modal(rv$ccc_lr_pair_select_target)
+  })
+  
+  
+  observeEvent(input$back_to_lr_pair_modal_from_pathway, {
+    removeModal()
+    open_lr_pair_modal(rv$ccc_lr_pair_select_target)
+  })
+  
+  observeEvent(input$apply_ccc_lr_pvalue, {
+    
+    df <- get_net_lr_table()
+    
+    if (!("pval" %in% colnames(df))) {
+      showNotification("Column 'pval' was not found in communication table.", type = "error")
+      return()
+    }
+    
+    selected_pairs <- unique(df$lr_pair[df$pval < input$ccc_lr_pvalue_threshold])
+    
+    rv$ccc_lr_pair_select <- unique(c(
+      get_current_lr_pairs(),
+      selected_pairs
+    ))
+    
+    update_lr_pair_text(session)
+  })
+  
+  
+  observeEvent(input$apply_ccc_lr_prob, {
+    
+    df <- get_net_lr_table()
+    
+    if (!("prob" %in% colnames(df))) {
+      showNotification("Column 'prob' was not found in communication table.", type = "error")
+      return()
+    }
+    
+    selected_pairs <- unique(df$lr_pair[df$prob > input$ccc_lr_prob_threshold])
+    
+    rv$ccc_lr_pair_select <- unique(c(
+      get_current_lr_pairs(),
+      selected_pairs
+    ))
+    
+    update_lr_pair_text(session)
+  })
+  
+  observeEvent(input$confirm_lr_pair_select, {
+    
+    rv$ccc_lr_pair_select <- get_current_lr_pairs()
+    rv$ui_freeze <- FALSE
     removeModal()
   })
   
@@ -9236,7 +9860,7 @@ server <- function(input, output, session) {
   )
   
 
-  # ----------------- REACTIVE Cell Cell Communication netAnalysis_signalingRole_network -----------------
+  # ----------------- VISUALIZATION FUNCTION Cell Cell Communication netAnalysis_signalingRole_network -----------------
   netAnalysis_signalingRole_network_reactive <- reactive({
     
     req(rv$cccd_obj)
@@ -9497,7 +10121,7 @@ server <- function(input, output, session) {
     }
   )
   
-  # ----------------- REACTIVE Cell Cell Communication netAnalysis_contribution -----------------
+  # ----------------- VISUALIZATION FUNCTION Cell Cell Communication netAnalysis_contribution -----------------
   netAnalysis_contribution_reactive <- reactive({
     
     req(rv$cccd_obj)
@@ -9819,6 +10443,474 @@ server <- function(input, output, session) {
       )
     }
   )
+  # ----------------- VISUALIZATION FUNCTION Cell Cell Communication netVisual_individual -----------------
+  plot_individual_message <- function(msg) {
+    plot.new()
+    text(0.5, 0.5, msg, col = "red", cex = 1.2)
+    invisible(NULL)
+  }
+  
+  
+  plot_individual_one <- function(obj, lr_pair, dataset_name = NULL) {
+    
+    if (is.null(obj) || !methods::is(obj, "CellChat")) {
+      plot_individual_message("Invalid CellChat object.")
+      return(invisible(NULL))
+    }
+    
+    if (is.null(obj@LR$LRsig) || !("interaction_name" %in% colnames(obj@LR$LRsig))) {
+      plot_individual_message("L-R pair information is not available.")
+      return(invisible(NULL))
+    }
+    
+    pairLR.use <- obj@LR$LRsig[
+      obj@LR$LRsig$interaction_name == lr_pair,
+      ,
+      drop = FALSE
+    ]
+    
+    if (nrow(pairLR.use) == 0) {
+      plot_individual_message(
+        paste0(
+          "L-R pair '", lr_pair, "' is not found",
+          if (!is.null(dataset_name)) paste0(" in ", dataset_name) else "",
+          "."
+        )
+      )
+      return(invisible(NULL))
+    }
+    
+    title_use <- if (is.null(dataset_name)) {
+      lr_pair
+    } else {
+      paste0(lr_pair, "_", dataset_name)
+    }
+      if (is.null(obj@net$prob)) {
+        plot_individual_message("obj@net$prob is not available.")
+        return(invisible(NULL))
+      }
+      
+      lr_index <- which(obj@LR$LRsig$interaction_name == lr_pair)[1]
+      
+      if (is.na(lr_index)) {
+        plot_individual_message(
+          paste0(
+            "L-R pair '", lr_pair, "' is not found",
+            if (!is.null(dataset_name)) paste0(" in ", dataset_name) else "",
+            "."
+          )
+        )
+        return(invisible(NULL))
+      }
+      
+      mat <- obj@net$prob[, , lr_index]
+      
+      if (!is.null(dimnames(obj@net$weight))) {
+        dimnames(mat) <- dimnames(obj@net$weight)
+      }
+      
+      if (all(mat == 0, na.rm = TRUE)) {
+        plot_individual_message(
+          paste0(
+            "L-R pair '", lr_pair, "' has no detected communication",
+            if (!is.null(dataset_name)) paste0(" in ", dataset_name) else "",
+            "."
+          )
+        )
+        return(invisible(NULL))
+      }
+      
+      g <- igraph::graph_from_adjacency_matrix(
+        mat,
+        mode = "directed",
+        weighted = TRUE,
+        diag = TRUE
+      )
+      
+      n <- nrow(mat)
+      theta <- seq(0, 2 * pi, length.out = n + 1)[1:n]
+      layout_circle <- cbind(cos(theta), sin(theta))
+      rownames(layout_circle) <- rownames(mat)
+      
+      vertex_colors <- tryCatch(
+        CellChat::scPalette(n),
+        error = function(e) grDevices::rainbow(n)
+      )
+      names(vertex_colors) <- rownames(mat)
+      
+      edge_ends <- igraph::ends(g, igraph::E(g), names = TRUE)
+      edge_from <- edge_ends[, 1]
+      edge_to <- edge_ends[, 2]
+      edge_weights <- igraph::E(g)$weight
+      
+      max_weight <- max(edge_weights, na.rm = TRUE)
+      
+      if (!is.finite(max_weight) || max_weight <= 0) {
+        plot_individual_message(
+          paste0(
+            "L-R pair '", lr_pair, "' has no positive edge weight",
+            if (!is.null(dataset_name)) paste0(" in ", dataset_name) else "",
+            "."
+          )
+        )
+        return(invisible(NULL))
+      }
+      
+      edge_width <- edge_weights / max_weight * input$individual_edge_width_max
+      edge_colors <- grDevices::adjustcolor(vertex_colors[edge_from], alpha.f = 0.6)
+      
+      loop_angles <- rep(0, igraph::ecount(g))
+      
+      for (i in seq_len(igraph::ecount(g))) {
+        if (edge_from[i] == edge_to[i]) {
+          vertex_index <- match(edge_from[i], rownames(mat))
+          loop_angles[i] <- theta[vertex_index]
+        }
+      }
+      
+      plot(
+        g,
+        layout = layout_circle,
+        vertex.label = NA,
+        vertex.size = 15,
+        vertex.color = vertex_colors,
+        vertex.frame.color = NA,
+        edge.width = edge_width,
+        edge.color = edge_colors,
+        edge.arrow.size = input$individual_arrow_size,
+        edge.curved = 0.25,
+        loop.angle = loop_angles,
+        loop.size = 1.2,
+        main = "",
+        margin = 0.2
+      )
+      
+      label_radius <- 1.15
+      label_adj <- ifelse(cos(theta) >= 0, 0, 1)
+      
+      text(
+        x = cos(theta) * label_radius,
+        y = sin(theta) * label_radius,
+        labels = rownames(mat),
+        cex = input$individual_vertex_label_size,
+        col = "black",
+        font = 1,
+        family = "sans",
+        adj = label_adj
+      )
+      
+      title(main = title_use)
+      return(invisible(NULL))
+    
+    
+    invisible(NULL)
+  }
+  
+  netVisual_individual_reactive <- reactive({
+    
+    req(rv$cccd_obj)
+    req(rv$ccc_lr_pair_select)
+    req(!rv$ui_freeze)
+    
+    cellchat_obj <- rv$cccd_obj$data
+    cellchat_merge <- rv$cccd_obj$data_merge
+    
+    lr_pairs <- rv$ccc_lr_pair_select
+    
+    if (length(lr_pairs) == 0) {
+      return(list(
+        type = "message",
+        content = "Please select at least one L-R pair first."
+      ))
+    }
+    
+    lr_pair_use <- lr_pairs[1]
+    
+    if (!is.null(cellchat_merge)) {
+      
+      object.list <- cellchat_obj
+      
+      if (!is.list(object.list) || length(object.list) < 2) {
+        return(list(
+          type = "message",
+          content = "The uploaded file has a merged CellChat object, but the original object list is not available."
+        ))
+      }
+      
+      plot_fun <- function() {
+        
+        dataset_use <- names(object.list)[1:min(2, length(object.list))]
+        
+        old_par <- par(no.readonly = TRUE)
+        on.exit(par(old_par), add = TRUE)
+        
+        par(mfrow = c(1, length(dataset_use)), xpd = TRUE)
+        
+        for (dataset_name in dataset_use) {
+          plot_individual_one(
+            obj = object.list[[dataset_name]],
+            lr_pair = lr_pair_use,
+            dataset_name = dataset_name
+          )
+        }
+        
+        invisible(NULL)
+      }
+      
+    } else {
+      
+      plot_fun <- function() {
+        
+        old_par <- par(no.readonly = TRUE)
+        on.exit(par(old_par), add = TRUE)
+        
+        par(mfrow = c(1, 1), xpd = TRUE)
+        
+        plot_individual_one(
+          obj = cellchat_obj,
+          lr_pair = lr_pair_use,
+          dataset_name = NULL
+        )
+        
+        invisible(NULL)
+      }
+    }
+    
+    list(
+      type = "plot",
+      plot_fun = plot_fun,
+      lr_pair = lr_pair_use
+    )
+  })
+  
+  output$netVisual_individual_control <- renderUI({
+    
+    if (!is.null(rv$cccd_obj$data_merge)) {
+      width_val <- "800px"
+    } else {
+      width_val <- "400px"
+    }
+    
+    plotOutput(
+      "netVisual_individual_plot",
+      height = "400px",
+      width = width_val
+    )
+  })
+  
+  
+  output$netVisual_individual_plot <- renderPlot({
+    
+    req(netVisual_individual_reactive())
+    req(!rv$ui_freeze)
+    
+    res <- netVisual_individual_reactive()
+    
+    if (is.list(res) && res$type == "message") {
+      plot.new()
+      text(0.5, 0.5, res$content, cex = 1.2, col = "red")
+      return()
+    }
+    
+    res$plot_fun()
+  })
+  
+  observeEvent(input$generate_netVisual_individual, {
+    
+    req(rv$cccd_obj)
+    req(input$individual_save_path)
+    
+    lr_pairs <- rv$ccc_lr_pair_select
+    
+    if (is.null(lr_pairs) || length(lr_pairs) == 0) {
+      showNotification(
+        "Please select at least one L-R pair first.",
+        type = "error"
+      )
+      return()
+    }
+    
+    out_dir <- input$individual_save_path
+    
+    if (!dir.exists(out_dir)) {
+      dir.create(out_dir, recursive = TRUE)
+    }
+    
+    cellchat_obj <- rv$cccd_obj$data
+    cellchat_merge <- rv$cccd_obj$data_merge
+    has_merge <- !is.null(cellchat_merge)
+    
+    if (has_merge) {
+      object.list <- cellchat_obj
+      
+      if (!is.list(object.list) || length(object.list) < 2) {
+        showNotification(
+          "The uploaded file has a merged CellChat object, but the original object list is not available.",
+          type = "error"
+        )
+        return()
+      }
+      
+      dataset_use <- names(object.list)[1:min(2, length(object.list))]
+    }
+    
+    showModal(
+      modalDialog(
+        title = "Generating L-R Pair Network",
+        tags$div(id = "netVisual_individual_progress_detail", "Starting..."),
+        easyClose = FALSE,
+        footer = NULL
+      )
+    )
+    
+    generated_files <- character(0)
+    
+    for (i in seq_along(lr_pairs)) {
+      
+      lr_pair <- lr_pairs[i]
+      
+      shinyjs::html(
+        "netVisual_individual_progress_detail",
+        paste0(
+          "<b>Generating L-R pair network:</b> ", lr_pair, "<br>",
+          "Completed: ", i - 1, "<br>",
+          "Remaining: ", length(lr_pairs) - i + 1
+        )
+      )
+      
+      Sys.sleep(0.01)
+      
+      out_file <- file.path(
+        out_dir,
+        paste0(
+          "LRPairNetwork_",
+          lr_pair,
+          "_",
+          format(Sys.time(), "%Y%m%d_%H%M%S"),
+          ".pdf"
+        )
+      )
+      
+      tryCatch({
+        
+        pdf(
+          out_file,
+          width = input$individual_width,
+          height = input$individual_height
+        )
+        
+        old_par <- par(no.readonly = TRUE)
+        on.exit(par(old_par), add = TRUE)
+        
+        if (has_merge) {
+          
+          par(mfrow = c(1, length(dataset_use)), xpd = TRUE)
+          
+          for (dataset_name in dataset_use) {
+            plot_individual_one(
+              obj = object.list[[dataset_name]],
+              lr_pair = lr_pair,
+              dataset_name = dataset_name
+            )
+          }
+          
+        } else {
+          
+          par(mfrow = c(1, 1), xpd = TRUE)
+          
+          plot_individual_one(
+            obj = cellchat_obj,
+            lr_pair = lr_pair,
+            dataset_name = NULL
+          )
+        }
+        
+        dev.off()
+        
+        generated_files <- c(generated_files, out_file)
+        
+      }, error = function(e) {
+        
+        try(dev.off(), silent = TRUE)
+        
+        warning(
+          paste0(
+            "Failed to generate plot for ",
+            lr_pair,
+            ": ",
+            e$message
+          )
+        )
+      })
+    }
+    
+    rv$netVisual_individual_files <- generated_files
+    
+    removeModal()
+    
+    showNotification(
+      paste0(
+        "L-R pair network plots generated successfully. ",
+        "Generated files: ", length(generated_files),
+        ". Output directory: ", out_dir
+      ),
+      type = "message",
+      duration = 8
+    )
+  })
+  
+  output$download_netVisual_individual <- downloadHandler(
+    
+    filename = function() {
+      paste0(
+        "LRPairNetwork_",
+        format(Sys.time(), "%Y%m%d_%H%M%S"),
+        ".zip"
+      )
+    },
+    
+    content = function(file) {
+      
+      files <- rv$netVisual_individual_files
+      
+      if (is.null(files) || length(files) == 0) {
+        showNotification(
+          "No L-R pair network plots generated yet.",
+          type = "error",
+          duration = 5
+        )
+        return(NULL)
+      }
+      
+      files <- files[file.exists(files)]
+      
+      if (length(files) == 0) {
+        showNotification(
+          "Generated files were not found.",
+          type = "error",
+          duration = 5
+        )
+        return(NULL)
+      }
+      
+      old <- getwd()
+      on.exit(setwd(old), add = TRUE)
+      
+      setwd(dirname(files[1]))
+      
+      zip::zip(
+        zipfile = file,
+        files = basename(files)
+      )
+      
+      showNotification(
+        "L-R pair network plots downloaded successfully.",
+        type = "message",
+        duration = 3
+      )
+    }
+  )
+  
   # ----------------- Data Output Gene expression -----------------
   output$gene_expression_sub_ui <- renderUI({
     
