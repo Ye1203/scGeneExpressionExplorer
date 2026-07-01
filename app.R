@@ -2204,8 +2204,7 @@ server <- function(input, output, session) {
       tabsetPanel(
         tabPanel("Overall Level", uiOutput("cccc_overall_control_ui")),
         tabPanel("Cluster Level", uiOutput("cccc_cluster_control_ui")),
-        tabPanel("Pathway Level", uiOutput("cccc_pathway_control_ui")),
-        tabPanel("L-R Pair Level", uiOutput("cccc_pair_control_ui"))
+        tabPanel("Pathway Level", uiOutput("cccc_pathway_control_ui"))
       )
     }
   })
@@ -2251,15 +2250,14 @@ server <- function(input, output, session) {
             selected = "weight"
           )),
         column(3, numericInput("circle_vertex_label_size", "Cell group label size", value = 1.0)),
-        column(3, numericInput("circle_vertex_size", "Node size", value = 30)),
+        column(3, numericInput("circle_vertex_size", "Node size", value = 3)),
         column(3, numericInput("circle_edge_width_max", "Max line width", value = 10))
       ),
       
       fluidRow(
-        column(3, numericInput("circle_arrow_size", "Arrow size", value = 0.2)),
+        column(3, numericInput("circle_arrow_size", "Arrow size", value = 0.5)),
         column(3, numericInput("circle_title_size", "Title size", value = 1.2)),
-        column(3, div(style = "padding-top: 22px;", checkboxInput("circle_show_edge_label", "Show edge label", value = FALSE))),
-        column(3, div(style = "padding-top: 22px;", checkboxInput("circle_remove_isolate", "Remove isolated cell groups", value = FALSE)))
+        column(3, div(style = "padding-top: 22px;", checkboxInput("circle_show_edge_label", "Show edge label", value = FALSE)))
       ),
       
       fluidRow(
@@ -2450,38 +2448,41 @@ server <- function(input, output, session) {
   })
   
   output$ccc_pathway_result_ui <- renderUI({
-    pathway <- rv$ccc_pathway_select
     
-    if (!is.null(pathway) && pathway != "") {
-      tabsetPanel(
-        tabPanel(
-          "Pathway Network",
-          uiOutput("netVisual_aggregate_ui")
-        ),
-        tabPanel(
-          "Pathway Heatmap",
-          uiOutput("netVisual_heatmap_ui")
-        ),
-        tabPanel(
-          "Pathway Role Network",
-          uiOutput("netAnalysis_signalingRole_network_ui")
-        ),
-        tabPanel(
-          "L-R Contribution",
-          uiOutput("netAnalysis_contribution_ui")
-        )
+    tabsetPanel(
+      tabPanel(
+        "Pathway Network",
+        uiOutput("netVisual_aggregate_ui")
+      ),
+      tabPanel(
+        "Pathway Heatmap",
+        uiOutput("netVisual_heatmap_ui")
+      ),
+      tabPanel(
+        "Pathway Role Network",
+        uiOutput("netAnalysis_signalingRole_network_ui")
+      ),
+      tabPanel(
+        "L-R Contribution",
+        uiOutput("netAnalysis_contribution_ui")
       )
-    } else {
-      div(
-        style = "padding: 15px; background-color: #fff3cd; border: 1px solid #ffeeba; border-radius: 5px;",
-        strong("Pathway required"),
-        br(),
-        "Please select and confirm a pathway first."
-      )
-    }
+    )
   })
   
   output$netVisual_aggregate_ui <- renderUI({
+    pathway <- rv$ccc_pathway_select
+    
+    if (is.null(pathway) || pathway == "") {
+      return(
+        div(
+          style = "padding:15px;background-color:#fff3cd;border:1px solid #ffeeba;border-radius:5px;",
+          strong("Pathway required"),
+          br(),
+          "Please select and confirm a pathway first."
+        )
+      )
+    }
+    
     tagList(
       div(
         style = "display: flex; justify-content: center;",
@@ -2504,7 +2505,7 @@ server <- function(input, output, session) {
         ),
         column(3, numericInput("aggregate_vertex_label_size", "Label size", value = 1)),
         column(3, numericInput("aggregate_edge_width_max", "Max line width", value = 8)),
-        column(3, numericInput("aggregate_arrow_size", "Arrow size", value = 0.2))
+        column(3, numericInput("aggregate_arrow_size", "Arrow size", value = 0.5))
       ),
       
       conditionalPanel(
@@ -2565,6 +2566,19 @@ server <- function(input, output, session) {
   })
   
   output$netVisual_heatmap_ui <- renderUI({
+    pathway <- rv$ccc_pathway_select
+    
+    if (is.null(pathway) || pathway == "") {
+      return(
+        div(
+          style = "padding:15px;background-color:#fff3cd;border:1px solid #ffeeba;border-radius:5px;",
+          strong("Pathway required"),
+          br(),
+          "Please select and confirm a pathway first."
+        )
+      )
+    }
+    
     tagList(
       div(
         style = "display: flex; justify-content: center;",
@@ -2628,6 +2642,18 @@ server <- function(input, output, session) {
   })
   
   output$netAnalysis_signalingRole_network_ui <- renderUI({
+    pathway <- rv$ccc_pathway_select
+    
+    if (is.null(pathway) || pathway == "") {
+      return(
+        div(
+          style = "padding:15px;background-color:#fff3cd;border:1px solid #ffeeba;border-radius:5px;",
+          strong("Pathway required"),
+          br(),
+          "Please select and confirm a pathway first."
+        )
+      )
+    }
     
     tagList(
       
@@ -2694,7 +2720,18 @@ server <- function(input, output, session) {
   })
   
   output$netAnalysis_contribution_ui <- renderUI({
+    pathway <- rv$ccc_pathway_select
     
+    if (is.null(pathway) || pathway == "") {
+      return(
+        div(
+          style = "padding:15px;background-color:#fff3cd;border:1px solid #ffeeba;border-radius:5px;",
+          strong("Pathway required"),
+          br(),
+          "Please select and confirm a pathway first."
+        )
+      )
+    }
     tagList(
       
       div(
@@ -2782,7 +2819,7 @@ server <- function(input, output, session) {
       fluidRow(
         column(3, numericInput("individual_vertex_label_size", "Vertex label size", value = 1)),
         column(3, numericInput("individual_edge_width_max", "Max edge width", value = 8)),
-        column(3, numericInput("individual_arrow_size", "Arrow size", value = 0.2))
+        column(3, numericInput("individual_arrow_size", "Arrow size", value = 0.5))
       ),
       
       fluidRow(
@@ -2831,20 +2868,288 @@ server <- function(input, output, session) {
   })
   # ----------------- Cell Cell Communication Comparison UI - overall-----------------
   output$cccc_overall_control_ui <- renderUI({
-    NULL
+    
+    tagList(
+      
+      h4("Overall Communication Comparison"),
+      
+      div(
+        style = "display: flex; justify-content: center;",
+        uiOutput("compareInteractions_control")
+      ),
+      
+      br(),
+      
+      fluidRow(
+        column(3, numericInput("compareInteractions_font_size", "Font size", value = 12)),
+        column(3, numericInput("compareInteractions_title_size", "Title size", value = 12)),
+        column(3, numericInput("compareInteractions_width", "PDF width (inch)", value = 6)),
+        column(3, numericInput("compareInteractions_height", "PDF height (inch)", value = 4))
+      ),
+      
+      fluidRow(
+        column(
+          12,
+          textInput(
+            "compareInteractions_save_path",
+            "Output directory",
+            value = file.path(rv$save_path, "CellCellCommunication"),
+            width = "100%"
+          )
+        )
+      ),
+      
+      fluidRow(
+        column(
+          6,
+          actionButton(
+            "save_compareInteractions",
+            "Generate Graph to Save Folder",
+            style = "background-color:#87CEFA;color:white;width:100%;"
+          )
+        ),
+        column(
+          6,
+          downloadButton(
+            "download_compareInteractions",
+            "Download Plot to Local",
+            style = "background-color:#4CAF50;color:white;width:100%;"
+          )
+        )
+      )
+    )
   })
   # ----------------- Cell Cell Communication Comparison UI - cluster-----------------
   output$cccc_cluster_control_ui <- renderUI({
-    NULL
+    tabsetPanel(
+      tabPanel(
+        "Communication Comparison",
+        uiOutput("netVisual_diffInteraction_ui")
+      ),
+        tabPanel(
+      "Communication Comparison Heatmap",
+      uiOutput("netVisual_relative_heatmap_ui")
+    ))
   })
+   output$netVisual_diffInteraction_ui <- renderUI({
+
+    tagList(
+      
+      div(
+        style = "display: flex; justify-content: center;",
+        uiOutput("cccc_cluster_compare_control")
+      ),
+      
+      br(),
+      
+      fluidRow(
+        column(3, numericInput("cccc_cluster_vertex_label_size", "Vertex label size", value = 1)),
+        column(3, numericInput("cccc_cluster_edge_width_max", "Max edge width", value = 8)),
+        column(3, numericInput("cccc_cluster_arrow_size", "Arrow size", value = 0.5)),
+        column(3, numericInput("cccc_cluster_title_size", "Title size", value = 12))
+      ),
+      
+      fluidRow(
+        column(3, numericInput("cccc_cluster_width", "PDF width (inch)", value = 12)),
+        column(3, numericInput("cccc_cluster_height", "PDF height (inch)", value = 6))
+      ),
+      
+      fluidRow(
+        column(
+          12,
+          textInput(
+            "cccc_cluster_save_path",
+            "Output directory",
+            value = file.path(rv$save_path, "CellCellCommunication"),
+            width = "100%"
+          )
+        )
+      ),
+      
+      fluidRow(
+        column(
+          6,
+          actionButton(
+            "save_cccc_cluster_compare",
+            "Generate Graph to Save Folder",
+            style = "background-color:#87CEFA;color:white;width:100%;"
+          )
+        ),
+        column(
+          6,
+          downloadButton(
+            "download_cccc_cluster_compare",
+            "Download Plot to Local",
+            style = "background-color:#4CAF50;color:white;width:100%;"
+          )
+        )
+      )
+    )
+  })
+   
+   output$netVisual_relative_heatmap_ui <- renderUI({
+     
+     if (is.null(rv$cccd_obj$data_merge)) {
+       return(
+         div(
+           style = "padding: 15px; background-color: #fff3cd; border: 1px solid #ffeeba; border-radius: 5px;",
+           strong("Merged CellChat object required"),
+           br(),
+           "Relative communication heatmap is only available for merged CellChat objects."
+         )
+       )
+     }
+     
+     tagList(
+       
+       h4("Relative Communication Heatmap"),
+       
+       div(
+         style = "display: flex; justify-content: center;",
+         uiOutput("netVisual_relative_heatmap_control")
+       ),
+       
+       br(),
+       
+       fluidRow(
+
+         column(
+           3,
+           numericInput(
+             "netVisual_relative_heatmap_axis_title_size",
+             "Axis title size",
+             value = 10,
+             min = 1
+           )
+         ),
+         column(
+           3,
+           numericInput(
+             "netVisual_relative_heatmap_axis_text_size",
+             "Axis text size",
+             value = 8,
+             min = 1
+           )
+         ),
+         column(
+           3,
+           numericInput(
+             "netVisual_relative_heatmap_legend_size",
+             "Legend size",
+             value = 10,
+             min = 1
+           )
+         )
+       ),
+       
+       fluidRow(
+         column(
+           3,
+           numericInput(
+             "netVisual_relative_heatmap_width",
+             "PDF width (inch)",
+             value = 12,
+             min = 1
+           )
+         ),
+         column(
+           3,
+           numericInput(
+             "netVisual_relative_heatmap_height",
+             "PDF height (inch)",
+             value = 6,
+             min = 1
+           )
+         )
+       ),
+       
+       fluidRow(
+         column(
+           12,
+           textInput(
+             "netVisual_relative_heatmap_save_path",
+             "Output directory",
+             value = file.path(rv$save_path, "CellCellCommunication"),
+             width = "100%"
+           )
+         )
+       ),
+       
+       fluidRow(
+         column(
+           6,
+           actionButton(
+             "save_netVisual_relative_heatmap",
+             "Generate Graph to Save Folder",
+             style = "background-color:#87CEFA;color:white;width:100%;"
+           )
+         ),
+         column(
+           6,
+           downloadButton(
+             "download_netVisual_relative_heatmap",
+             "Download Plot to Local",
+             style = "background-color:#4CAF50;color:white;width:100%;"
+           )
+         )
+       )
+     )
+   })
   # ----------------- Cell Cell Communication Comparison UI - pathway-----------------
   output$cccc_pathway_control_ui <- renderUI({
-    NULL
+    pathway <- rv$ccc_pathway_select
+    
+    tagList(
+      
+      h4("Signaling Pathway Information Flow Ranking"),
+      
+      div(
+        style = "display: flex; justify-content: center;",
+        uiOutput("rankNet_control")
+      ),
+      
+      br(),
+      
+      fluidRow(
+        column(3, numericInput("rankNet_font_size", "Font size", value = 10, min = 1)),
+        column(3, numericInput("rankNet_title_size", "Title size", value = 12, min = 1)),
+        column(3, numericInput("rankNet_width", "PDF width (inch)", value = 10, min = 1)),
+        column(3, numericInput("rankNet_height", "PDF height (inch)", value = 8, min = 1))
+      ),
+      
+      fluidRow(
+        column(
+          12,
+          textInput(
+            "rankNet_save_path",
+            "Output directory",
+            value = file.path(rv$save_path, "CellCellCommunication"),
+            width = "100%"
+          )
+        )
+      ),
+      
+      fluidRow(
+        column(
+          6,
+          actionButton(
+            "save_rankNet",
+            "Generate Graph to Save Folder",
+            style = "background-color:#87CEFA;color:white;width:100%;"
+          )
+        ),
+        column(
+          6,
+          downloadButton(
+            "download_rankNet",
+            "Download Plot to Local",
+            style = "background-color:#4CAF50;color:white;width:100%;"
+          )
+        )
+      )
+    )
   })
-  # ----------------- Cell Cell Communication Comparison UI - LRpair-----------------
-  output$cccc_pair_control_ui <- renderUI({
-    NULL
-  })
+  
   # ----------------- Data Output UI-----------------
   output$data_output_ui <- renderUI({
     req(input$do_tabs)
@@ -8475,7 +8780,13 @@ server <- function(input, output, session) {
     cellchat_obj <- rv$cccd_obj$data
     cellchat_merge <- rv$cccd_obj$data_merge
     
-    plot_circle_mat <- function(mat, title_name = NULL) {
+    measure_title <- if (input$circle_measure == "count") {
+      "Interaction Count"
+    } else {
+      "Interaction Weight"
+    }
+    
+    plot_circle_one <- function(mat, title_name = NULL) {
       
       if (is.null(mat)) {
         plot.new()
@@ -8489,54 +8800,10 @@ server <- function(input, output, session) {
         return(invisible(NULL))
       }
       
-      if (isTRUE(input$circle_remove_isolate)) {
-        keep <- rowSums(mat) + colSums(mat) > 0
-        mat <- mat[keep, keep, drop = FALSE]
-      }
-      
-      g <- igraph::graph_from_adjacency_matrix(
-        mat,
-        mode = "directed",
-        weighted = TRUE,
-        diag = TRUE
-      )
-      
-      n <- nrow(mat)
-      theta <- seq(0, 2 * pi, length.out = n + 1)[1:n]
-      layout_circle <- cbind(cos(theta), sin(theta))
-      rownames(layout_circle) <- rownames(mat)
-      
-      vertex_colors <- tryCatch(
-        CellChat::scPalette(n),
-        error = function(e) grDevices::rainbow(n)
-      )
-      names(vertex_colors) <- rownames(mat)
-      
-      edge_ends <- igraph::ends(g, igraph::E(g), names = TRUE)
-      edge_from <- edge_ends[, 1]
-      edge_to <- edge_ends[, 2]
-      
-      edge_weights <- igraph::E(g)$weight
-      edge_width <- edge_weights / max(edge_weights, na.rm = TRUE) * input$circle_edge_width_max
-      
-      edge_colors <- grDevices::adjustcolor(
-        vertex_colors[edge_from],
-        alpha.f = 0.6
-      )
-      
-      loop_angles <- rep(0, igraph::ecount(g))
-      
-      for (i in seq_len(igraph::ecount(g))) {
-        if (edge_from[i] == edge_to[i]) {
-          vertex_index <- match(edge_from[i], rownames(mat))
-          loop_angles[i] <- theta[vertex_index]
-        }
-      }
-      
-      measure_title <- if (input$circle_measure == "count") {
-        "Interaction Count"
-      } else {
-        "Interaction Weight"
+      if (nrow(mat) == 0 || ncol(mat) == 0) {
+        plot.new()
+        text(0.5, 0.5, "No non-isolated cell groups remain.", col = "red", cex = 1.2)
+        return(invisible(NULL))
       }
       
       final_title <- if (is.null(title_name)) {
@@ -8545,39 +8812,23 @@ server <- function(input, output, session) {
         paste0(title_name, " - ", measure_title)
       }
       
-      plot(
-        g,
-        layout = layout_circle,
-        vertex.label = NA,
-        vertex.size = input$circle_vertex_size,
-        vertex.color = vertex_colors,
-        vertex.frame.color = NA,
-        edge.width = edge_width,
-        edge.color = edge_colors,
-        edge.arrow.size = input$circle_arrow_size,
-        edge.curved = 0.25,
-        edge.label = if (isTRUE(input$circle_show_edge_label)) round(edge_weights, 2) else NA,
-        loop.angle = loop_angles,
-        loop.size = 1.2,
-        main = "",
-        margin = 0.2
+      group_size <- rep(1, nrow(mat))
+      names(group_size) <- rownames(mat)
+      
+      netVisual_circle(
+        net = mat,
+        vertex.weight = group_size,
+        weight.scale = TRUE,
+        label.edge = isTRUE(input$circle_show_edge_label),
+        edge.weight.max = max(mat, na.rm = TRUE),
+        edge.width.max = input$circle_edge_width_max,
+        vertex.size.max = input$circle_vertex_size,
+        vertex.label.cex = input$circle_vertex_label_size,
+        arrow.size = input$circle_arrow_size,
+        title.name = final_title
       )
       
-      label_radius <- 1.15
-      label_adj <- ifelse(cos(theta) >= 0, 0, 1)
-      
-      text(
-        x = cos(theta) * label_radius,
-        y = sin(theta) * label_radius,
-        labels = rownames(mat),
-        cex = input$circle_vertex_label_size,
-        col = "black",
-        font = 1,
-        family = "sans",
-        adj = label_adj
-      )
-      
-      title(main = final_title, cex.main = input$circle_title_size)
+      invisible(NULL)
     }
     
     if (!is.null(cellchat_merge)) {
@@ -8592,11 +8843,16 @@ server <- function(input, output, session) {
       }
       
       plot_fun <- function() {
-        par(mfrow = c(1, min(2, length(dataset_names))), xpd = TRUE)
+        old_par <- par(no.readonly = TRUE)
+        on.exit(par(old_par), add = TRUE)
         
-        for (dataset_name in dataset_names[1:min(2, length(dataset_names))]) {
+        dataset_use <- dataset_names[1:min(2, length(dataset_names))]
+        
+        par(mfrow = c(1, length(dataset_use)), xpd = TRUE)
+        
+        for (dataset_name in dataset_use) {
           mat <- cellchat_merge@net[[dataset_name]][[input$circle_measure]]
-          plot_circle_mat(mat, title_name = dataset_name)
+          plot_circle_one(mat, title_name = dataset_name)
         }
         
         invisible(NULL)
@@ -8605,17 +8861,22 @@ server <- function(input, output, session) {
     } else {
       
       plot_fun <- function() {
+        old_par <- par(no.readonly = TRUE)
+        on.exit(par(old_par), add = TRUE)
+        
         par(mfrow = c(1, 1), xpd = TRUE)
+        
         mat <- cellchat_obj@net[[input$circle_measure]]
-        plot_circle_mat(mat, title_name = "CellChat Network")
+        plot_circle_one(mat, title_name = "CellChat Network")
+        
         invisible(NULL)
       }
     }
     
-    return(list(
+    list(
       type = "plot",
       plot_fun = plot_fun
-    ))
+    )
   })
   
   output$netVisual_circle_control_ui <- renderUI({
@@ -9293,91 +9554,65 @@ server <- function(input, output, session) {
     
     plot_aggregate_one <- function(obj, dataset_name = NULL) {
       
-      if (!(signaling_use %in% obj@netP$pathways)) {
+      if (is.null(obj) || !methods::is(obj, "CellChat")) {
         plot.new()
-        text(0.5, 0.5, paste0("Pathway '", signaling_use, "' is not found."), col = "red", cex = 1.2)
+        text(0.5, 0.5, "Invalid CellChat object.", col = "red", cex = 1.2)
         return(invisible(NULL))
       }
       
-      title_use <- if (is.null(dataset_name)) signaling_use else paste0(signaling_use, "_", dataset_name)
+      if (!(signaling_use %in% obj@netP$pathways)) {
+        plot.new()
+        text(
+          0.5, 0.5,
+          paste0(
+            "Pathway '", signaling_use, "' is not found",
+            if (!is.null(dataset_name)) paste0(" in ", dataset_name) else "",
+            "."
+          ),
+          col = "red",
+          cex = 1.2
+        )
+        return(invisible(NULL))
+      }
+      
+      title_use <- if (is.null(dataset_name)) {
+        signaling_use
+      } else {
+        paste0(signaling_use, "_", dataset_name)
+      }
       
       if (input$aggregate_layout == "circle") {
         
-        pathway_index <- which(obj@netP$pathways == signaling_use)
-        mat <- obj@netP$prob[, , pathway_index]
-        if (!is.null(dimnames(obj@net$weight))) dimnames(mat) <- dimnames(obj@net$weight)
-        
-        g <- igraph::graph_from_adjacency_matrix(mat, mode = "directed", weighted = TRUE, diag = TRUE)
-        
-        n <- nrow(mat)
-        theta <- seq(0, 2 * pi, length.out = n + 1)[1:n]
-        layout_circle <- cbind(cos(theta), sin(theta))
-        rownames(layout_circle) <- rownames(mat)
-        
-        vertex_colors <- tryCatch(CellChat::scPalette(n), error = function(e) grDevices::rainbow(n))
-        names(vertex_colors) <- rownames(mat)
-        
-        edge_ends <- igraph::ends(g, igraph::E(g), names = TRUE)
-        edge_from <- edge_ends[, 1]
-        edge_to <- edge_ends[, 2]
-        edge_weights <- igraph::E(g)$weight
-        
-        edge_width <- edge_weights / max(edge_weights, na.rm = TRUE) * input$aggregate_edge_width_max
-        edge_colors <- grDevices::adjustcolor(vertex_colors[edge_from], alpha.f = 0.6)
-        
-        loop_angles <- rep(0, igraph::ecount(g))
-        for (i in seq_len(igraph::ecount(g))) {
-          if (edge_from[i] == edge_to[i]) {
-            vertex_index <- match(edge_from[i], rownames(mat))
-            loop_angles[i] <- theta[vertex_index]
-          }
-        }
-        
-        plot(
-          g,
-          layout = layout_circle,
-          vertex.label = NA,
-          vertex.size = 15,
-          vertex.color = vertex_colors,
-          vertex.frame.color = NA,
-          edge.width = edge_width,
-          edge.color = edge_colors,
-          edge.arrow.size = input$aggregate_arrow_size,
-          edge.curved = 0.25,
-          loop.angle = loop_angles,
-          loop.size = 1.2,
-          main = "",
-          margin = 0.2
+        netVisual_aggregate(
+          obj,
+          signaling = signaling_use,
+          signaling.name = title_use,
+          layout = "circle",
+          vertex.label.cex = input$aggregate_vertex_label_size,
+          edge.width.max = input$aggregate_edge_width_max,
+          arrow.size = input$aggregate_arrow_size,
+          title.space = 2
         )
         
-        label_radius <- 1.15
-        label_adj <- ifelse(cos(theta) >= 0, 0, 1)
-        
-        text(
-          x = cos(theta) * label_radius,
-          y = sin(theta) * label_radius,
-          labels = rownames(mat),
-          cex = input$aggregate_vertex_label_size,
-          col = "black",
-          font = 1,
-          family = "sans",
-          adj = label_adj
-        )
-        
-        title(main = title_use)
         return(invisible(NULL))
       }
       
       if (input$aggregate_layout == "hierarchy") {
         
         n_cell_groups <- length(levels(obj@idents))
-        vertex_receiver_use <- parse_vertex_receiver(input$aggregate_vertex_receiver, n_cell_groups)
+        vertex_receiver_use <- parse_vertex_receiver(
+          input$aggregate_vertex_receiver,
+          n_cell_groups
+        )
         
         if (is.null(vertex_receiver_use)) {
           plot.new()
           text(
             0.5, 0.5,
-            paste0("Please enter valid receiver cell indices.\nValid range: 1 to ", n_cell_groups),
+            paste0(
+              "Please enter valid receiver cell indices.\n",
+              "Valid range: 1 to ", n_cell_groups
+            ),
             col = "red",
             cex = 1.2
           )
@@ -9412,6 +9647,8 @@ server <- function(input, output, session) {
         
         return(invisible(NULL))
       }
+      
+      invisible(NULL)
     }
     
     if (!is.null(cellchat_merge)) {
@@ -9425,14 +9662,29 @@ server <- function(input, output, session) {
         ))
       }
       
+      object.list <- object.list[
+        sapply(object.list, function(x) methods::is(x, "CellChat"))
+      ]
+      
+      if (length(object.list) == 0) {
+        return(list(
+          type = "message",
+          content = "No valid CellChat object was found in the object list."
+        ))
+      }
+      
       plot_fun <- function() {
         
+        old_par <- par(no.readonly = TRUE)
+        on.exit(par(old_par), add = TRUE)
+        
         dataset_use <- names(object.list)[1:min(2, length(object.list))]
-        par(mfrow = c(1, 2), xpd = TRUE)
-
+        
+        par(mfrow = c(1, length(dataset_use)), xpd = TRUE)
+        
         for (dataset_name in dataset_use) {
           plot_aggregate_one(
-            object.list[[dataset_name]],
+            obj = object.list[[dataset_name]],
             dataset_name = dataset_name
           )
         }
@@ -9443,8 +9695,17 @@ server <- function(input, output, session) {
     } else {
       
       plot_fun <- function() {
+        
+        old_par <- par(no.readonly = TRUE)
+        on.exit(par(old_par), add = TRUE)
+        
         par(mfrow = c(1, 1), xpd = TRUE)
-        plot_aggregate_one(cellchat_obj)
+        
+        plot_aggregate_one(
+          obj = cellchat_obj,
+          dataset_name = NULL
+        )
+        
         invisible(NULL)
       }
     }
@@ -10449,8 +10710,6 @@ server <- function(input, output, session) {
     text(0.5, 0.5, msg, col = "red", cex = 1.2)
     invisible(NULL)
   }
-  
-  
   plot_individual_one <- function(obj, lr_pair, dataset_name = NULL) {
     
     if (is.null(obj) || !methods::is(obj, "CellChat")) {
@@ -10480,128 +10739,37 @@ server <- function(input, output, session) {
       return(invisible(NULL))
     }
     
+    signaling_use <- if ("pathway_name" %in% colnames(pairLR.use)) {
+      as.character(pairLR.use$pathway_name[1])
+    } else if ("pathway" %in% colnames(pairLR.use)) {
+      as.character(pairLR.use$pathway[1])
+    } else {
+      NULL
+    }
+    
+    if (is.null(signaling_use) || signaling_use == "" || is.na(signaling_use)) {
+      plot_individual_message(
+        paste0("Cannot determine pathway for L-R pair '", lr_pair, "'.")
+      )
+      return(invisible(NULL))
+    }
+    
     title_use <- if (is.null(dataset_name)) {
       lr_pair
     } else {
       paste0(lr_pair, "_", dataset_name)
     }
-      if (is.null(obj@net$prob)) {
-        plot_individual_message("obj@net$prob is not available.")
-        return(invisible(NULL))
-      }
-      
-      lr_index <- which(obj@LR$LRsig$interaction_name == lr_pair)[1]
-      
-      if (is.na(lr_index)) {
-        plot_individual_message(
-          paste0(
-            "L-R pair '", lr_pair, "' is not found",
-            if (!is.null(dataset_name)) paste0(" in ", dataset_name) else "",
-            "."
-          )
-        )
-        return(invisible(NULL))
-      }
-      
-      mat <- obj@net$prob[, , lr_index]
-      
-      if (!is.null(dimnames(obj@net$weight))) {
-        dimnames(mat) <- dimnames(obj@net$weight)
-      }
-      
-      if (all(mat == 0, na.rm = TRUE)) {
-        plot_individual_message(
-          paste0(
-            "L-R pair '", lr_pair, "' has no detected communication",
-            if (!is.null(dataset_name)) paste0(" in ", dataset_name) else "",
-            "."
-          )
-        )
-        return(invisible(NULL))
-      }
-      
-      g <- igraph::graph_from_adjacency_matrix(
-        mat,
-        mode = "directed",
-        weighted = TRUE,
-        diag = TRUE
-      )
-      
-      n <- nrow(mat)
-      theta <- seq(0, 2 * pi, length.out = n + 1)[1:n]
-      layout_circle <- cbind(cos(theta), sin(theta))
-      rownames(layout_circle) <- rownames(mat)
-      
-      vertex_colors <- tryCatch(
-        CellChat::scPalette(n),
-        error = function(e) grDevices::rainbow(n)
-      )
-      names(vertex_colors) <- rownames(mat)
-      
-      edge_ends <- igraph::ends(g, igraph::E(g), names = TRUE)
-      edge_from <- edge_ends[, 1]
-      edge_to <- edge_ends[, 2]
-      edge_weights <- igraph::E(g)$weight
-      
-      max_weight <- max(edge_weights, na.rm = TRUE)
-      
-      if (!is.finite(max_weight) || max_weight <= 0) {
-        plot_individual_message(
-          paste0(
-            "L-R pair '", lr_pair, "' has no positive edge weight",
-            if (!is.null(dataset_name)) paste0(" in ", dataset_name) else "",
-            "."
-          )
-        )
-        return(invisible(NULL))
-      }
-      
-      edge_width <- edge_weights / max_weight * input$individual_edge_width_max
-      edge_colors <- grDevices::adjustcolor(vertex_colors[edge_from], alpha.f = 0.6)
-      
-      loop_angles <- rep(0, igraph::ecount(g))
-      
-      for (i in seq_len(igraph::ecount(g))) {
-        if (edge_from[i] == edge_to[i]) {
-          vertex_index <- match(edge_from[i], rownames(mat))
-          loop_angles[i] <- theta[vertex_index]
-        }
-      }
-      
-      plot(
-        g,
-        layout = layout_circle,
-        vertex.label = NA,
-        vertex.size = 15,
-        vertex.color = vertex_colors,
-        vertex.frame.color = NA,
-        edge.width = edge_width,
-        edge.color = edge_colors,
-        edge.arrow.size = input$individual_arrow_size,
-        edge.curved = 0.25,
-        loop.angle = loop_angles,
-        loop.size = 1.2,
-        main = "",
-        margin = 0.2
-      )
-      
-      label_radius <- 1.15
-      label_adj <- ifelse(cos(theta) >= 0, 0, 1)
-      
-      text(
-        x = cos(theta) * label_radius,
-        y = sin(theta) * label_radius,
-        labels = rownames(mat),
-        cex = input$individual_vertex_label_size,
-        col = "black",
-        font = 1,
-        family = "sans",
-        adj = label_adj
-      )
-      
-      title(main = title_use)
-      return(invisible(NULL))
     
+    netVisual_individual(
+      obj,
+      signaling = signaling_use,
+      pairLR.use = pairLR.use,
+      layout = "circle",
+      vertex.label.cex = input$individual_vertex_label_size,
+      edge.width.max = input$individual_edge_width_max,
+      arrow.size = input$individual_arrow_size,
+      signaling.name = title_use
+    )
     
     invisible(NULL)
   }
@@ -10911,6 +11079,700 @@ server <- function(input, output, session) {
     }
   )
   
+  # ----------------- VISUALIZATION FUNCTION Cell Cell Communication compareInteractions -----------------
+  compareInteractions_reactive <- reactive({
+    
+    req(rv$cccd_obj)
+    req(rv$cccd_obj$data_merge)
+    req(input$compareInteractions_font_size)
+    req(input$compareInteractions_title_size)
+    req(!rv$ui_freeze)
+    
+    cellchat_merge <- rv$cccd_obj$data_merge
+    
+    make_compare_plot <- function(measure_use, title_use) {
+      
+      p <- compareInteractions(
+        cellchat_merge,
+        show.legend = FALSE,
+        group = c(1, 2),
+        measure = measure_use
+      )
+      
+      p +
+        ggplot2::ggtitle(title_use) +
+        ggplot2::theme(
+          plot.title = ggplot2::element_text(
+            size = input$compareInteractions_title_size,
+            face = "bold",
+            hjust = 0.5
+          ),
+          axis.title = ggplot2::element_text(
+            size = input$compareInteractions_font_size
+          ),
+          axis.text = ggplot2::element_text(
+            size = input$compareInteractions_font_size
+          ),
+          legend.text = ggplot2::element_text(
+            size = input$compareInteractions_font_size
+          ),
+          legend.title = ggplot2::element_text(
+            size = input$compareInteractions_font_size
+          )
+        )
+    }
+    
+    plot_count <- make_compare_plot(
+      measure_use = "count",
+      title_use = "Number of interactions"
+    )
+    
+    plot_weight <- make_compare_plot(
+      measure_use = "weight",
+      title_use = "Interaction strength"
+    )
+    
+    plot_fun <- function() {
+      print(
+        patchwork::wrap_plots(
+          plot_count,
+          plot_weight,
+          nrow = 1
+        )
+      )
+      invisible(NULL)
+    }
+    
+    list(
+      type = "plot",
+      plot_fun = plot_fun
+    )
+  })
+  
+  output$compareInteractions_control <- renderUI({
+    
+    div(
+      style = "max-width: 800px; overflow-x: auto; width: 100%;",
+      plotOutput(
+        "compareInteractions_plot",
+        height = "300px",
+        width = "600px"
+      )
+    )
+  })
+  
+  
+  output$compareInteractions_plot <- renderPlot({
+    
+    req(compareInteractions_reactive())
+    req(!rv$ui_freeze)
+    
+    res <- compareInteractions_reactive()
+    
+    if (is.list(res) && res$type == "message") {
+      plot.new()
+      text(0.5, 0.5, res$content, cex = 1.2, col = "red")
+      return()
+    }
+    
+    res$plot_fun()
+  })
+  observeEvent(input$save_compareInteractions, {
+    
+    req(compareInteractions_reactive())
+    req(input$compareInteractions_save_path)
+    
+    res <- compareInteractions_reactive()
+    
+    if (is.list(res) && res$type == "message") {
+      showNotification(res$content, type = "error")
+      return()
+    }
+    
+    out_dir <- input$compareInteractions_save_path
+    
+    if (!dir.exists(out_dir)) {
+      dir.create(out_dir, recursive = TRUE)
+    }
+    
+    out_file <- file.path(
+      out_dir,
+      paste0(
+        "OverallCommunicationComparison_",
+        format(Sys.time(), "%Y%m%d_%H%M%S"),
+        ".pdf"
+      )
+    )
+    
+    pdf(
+      out_file,
+      width = input$compareInteractions_width,
+      height = input$compareInteractions_height
+    )
+    
+    res$plot_fun()
+    
+    dev.off()
+    
+    showNotification(
+      paste0("Saved overall communication comparison: ", out_file),
+      type = "message"
+    )
+  })
+  output$download_compareInteractions <- downloadHandler(
+    
+    filename = function() {
+      paste0(
+        "OverallCommunicationComparison_",
+        format(Sys.time(), "%Y%m%d_%H%M%S"),
+        ".pdf"
+      )
+    },
+    
+    content = function(file) {
+      
+      req(compareInteractions_reactive())
+      
+      res <- compareInteractions_reactive()
+      
+      pdf(
+        file,
+        width = input$compareInteractions_width,
+        height = input$compareInteractions_height
+      )
+      
+      if (is.list(res) && res$type == "message") {
+        plot.new()
+        text(0.5, 0.5, res$content, cex = 1.2, col = "red")
+      } else {
+        res$plot_fun()
+      }
+      
+      dev.off()
+      
+      showNotification(
+        "Overall communication comparison downloaded successfully.",
+        type = "message",
+        duration = 3
+      )
+    }
+  )
+  # ----------------- VISUALIZATION FUNCTION Cell Cell Communication netVisual_diffInteraction -----------------
+  cccc_cluster_compare_reactive <- reactive({
+    
+    req(rv$cccd_obj)
+    req(rv$cccd_obj$data_merge)
+    req(input$cccc_cluster_vertex_label_size)
+    req(input$cccc_cluster_edge_width_max)
+    req(input$cccc_cluster_arrow_size)
+    req(input$cccc_cluster_title_size)
+    req(!rv$ui_freeze)
+    
+    cellchat_merge <- rv$cccd_obj$data_merge
+    
+    plot_fun <- function() {
+      
+      old_par <- par(no.readonly = TRUE)
+      on.exit(par(old_par), add = TRUE)
+      
+      par(mfrow = c(1, 2), xpd = TRUE)
+      
+      netVisual_diffInteraction(
+        cellchat_merge,
+        weight.scale = TRUE,
+        measure = "count",
+        vertex.label.cex = input$cccc_cluster_vertex_label_size,
+        edge.width.max = input$cccc_cluster_edge_width_max,
+        arrow.size = input$cccc_cluster_arrow_size,
+        title.name = ""
+      )
+      title(
+        main = "Differential number of interactions",
+        cex.main = input$cccc_cluster_title_size / 12
+      )
+      
+      netVisual_diffInteraction(
+        cellchat_merge,
+        weight.scale = TRUE,
+        measure = "weight",
+        vertex.label.cex = input$cccc_cluster_vertex_label_size,
+        edge.width.max = input$cccc_cluster_edge_width_max,
+        arrow.size = input$cccc_cluster_arrow_size,
+        title.name = ""
+      )
+      title(
+        main = "Differential interaction strength",
+        cex.main = input$cccc_cluster_title_size / 12
+      )
+      
+      invisible(NULL)
+    }
+    
+    list(
+      type = "plot",
+      plot_fun = plot_fun
+    )
+  })
+  output$cccc_cluster_compare_control <- renderUI({
+    
+    div(
+      style = "max-width: 800px; overflow-x: auto; width: 100%;",
+      plotOutput(
+        "cccc_cluster_compare_plot",
+        height = "450px",
+        width = "900px"
+      )
+    )
+  })
+  output$cccc_cluster_compare_plot <- renderPlot({
+    
+    req(cccc_cluster_compare_reactive())
+    req(!rv$ui_freeze)
+    
+    res <- cccc_cluster_compare_reactive()
+    
+    if (is.list(res) && res$type == "message") {
+      plot.new()
+      text(0.5, 0.5, res$content, cex = 1.2, col = "red")
+      return()
+    }
+    
+    res$plot_fun()
+  })
+  observeEvent(input$save_cccc_cluster_compare, {
+    
+    req(cccc_cluster_compare_reactive())
+    req(input$cccc_cluster_save_path)
+    
+    res <- cccc_cluster_compare_reactive()
+    
+    out_dir <- input$cccc_cluster_save_path
+    
+    if (!dir.exists(out_dir)) {
+      dir.create(out_dir, recursive = TRUE)
+    }
+    
+    out_file <- file.path(
+      out_dir,
+      paste0(
+        "ClusterCommunicationComparison_",
+        format(Sys.time(), "%Y%m%d_%H%M%S"),
+        ".pdf"
+      )
+    )
+    
+    pdf(
+      out_file,
+      width = input$cccc_cluster_width,
+      height = input$cccc_cluster_height
+    )
+    
+    res$plot_fun()
+    
+    dev.off()
+    
+    showNotification(
+      paste0("Saved cluster communication comparison: ", out_file),
+      type = "message"
+    )
+  })
+  output$download_cccc_cluster_compare <- downloadHandler(
+    
+    filename = function() {
+      paste0(
+        "ClusterCommunicationComparison_",
+        format(Sys.time(), "%Y%m%d_%H%M%S"),
+        ".pdf"
+      )
+    },
+    
+    content = function(file) {
+      
+      req(cccc_cluster_compare_reactive())
+      
+      res <- cccc_cluster_compare_reactive()
+      
+      pdf(
+        file,
+        width = input$cccc_cluster_width,
+        height = input$cccc_cluster_height
+      )
+      
+      res$plot_fun()
+      
+      dev.off()
+      
+      showNotification(
+        "Cluster communication comparison downloaded successfully.",
+        type = "message",
+        duration = 3
+      )
+    }
+  )
+  # ----------------- VISUALIZATION FUNCTION Cell Cell Communication relatived netVisual_heatmap -----------------
+  netVisual_relative_heatmap_reactive <- reactive({
+    
+    req(rv$cccd_obj)
+    req(rv$cccd_obj$data_merge)
+    req(input$netVisual_relative_heatmap_axis_title_size)
+    req(input$netVisual_relative_heatmap_axis_text_size)
+    req(input$netVisual_relative_heatmap_legend_size)
+    req(!rv$ui_freeze)
+    
+    cellchat_merge <- rv$cccd_obj$data_merge
+    
+    make_relative_heatmap <- function(measure_use) {
+      
+      title_use <- if (measure_use == "count") {
+        "Differential number of interactions"
+      } else {
+        "Differential interaction strength"
+      }
+      
+      ht <- netVisual_heatmap(
+        cellchat_merge,
+        comparison = c(1, 2),
+        measure = measure_use,
+        slot.name = "net",
+        title.name = title_use,
+        font.size = input$netVisual_relative_heatmap_axis_text_size
+      )
+      
+      ht@row_names_param$gp <- grid::gpar(
+        fontsize = input$netVisual_relative_heatmap_axis_text_size
+      )
+      ht@column_names_param$gp <- grid::gpar(
+        fontsize = input$netVisual_relative_heatmap_axis_text_size
+      )
+      ht@row_title_param$gp <- grid::gpar(
+        fontsize = input$netVisual_relative_heatmap_axis_title_size
+      )
+      ht@column_title_param$gp <- grid::gpar(
+        fontsize = input$netVisual_relative_heatmap_axis_title_size
+      )
+      ht@matrix_legend_param$title_gp <- grid::gpar(
+        fontsize = input$netVisual_relative_heatmap_legend_size
+      )
+      ht@matrix_legend_param$labels_gp <- grid::gpar(
+        fontsize = input$netVisual_relative_heatmap_legend_size
+      )
+      
+      ht
+    }
+    
+    draw_heatmap_to_grob <- function(ht) {
+      grid::grid.grabExpr({
+        ComplexHeatmap::draw(ht)
+      })
+    }
+    
+    grob_list <- list(
+      draw_heatmap_to_grob(make_relative_heatmap("count")),
+      draw_heatmap_to_grob(make_relative_heatmap("weight"))
+    )
+    
+    plot_fun <- function() {
+      combined_grob <- gridExtra::arrangeGrob(
+        grobs = grob_list,
+        nrow = 1,
+        ncol = 2
+      )
+      grid::grid.newpage()
+      grid::grid.draw(combined_grob)
+      invisible(NULL)
+    }
+    
+    list(type = "plot", plot_fun = plot_fun)
+  })
+  output$netVisual_relative_heatmap_control <- renderUI({
+    
+    get_cluster_n <- function(obj) {
+      if (is.null(obj)) return(10)
+      if (methods::is(obj, "CellChat")) {
+        if (!is.null(obj@idents)) return(length(levels(obj@idents)))
+        if (!is.null(obj@net$weight)) return(ncol(obj@net$weight))
+      }
+      return(10)
+    }
+    
+    cluster_n <- get_cluster_n(rv$cccd_obj$data_merge)
+    single_panel_size <- max(350, cluster_n * 45)
+    
+    div(
+      style = "max-width: 800px; max-height: 1600px; overflow-x: auto; overflow-y: auto; width: 100%;",
+      plotOutput(
+        "netVisual_relative_heatmap_plot",
+        height = paste0(single_panel_size, "px"),
+        width = paste0(single_panel_size * 2, "px")
+      )
+    )
+  })
+  output$netVisual_relative_heatmap_plot <- renderPlot({
+    
+    req(netVisual_relative_heatmap_reactive())
+    req(!rv$ui_freeze)
+    
+    res <- netVisual_relative_heatmap_reactive()
+    
+    if (is.list(res) && res$type == "message") {
+      plot.new()
+      text(0.5, 0.5, res$content, cex = 1.2, col = "red")
+      return()
+    }
+    
+    res$plot_fun()
+  })
+  observeEvent(input$save_netVisual_relative_heatmap, {
+    
+    req(netVisual_relative_heatmap_reactive())
+    req(input$netVisual_relative_heatmap_save_path)
+    
+    res <- netVisual_relative_heatmap_reactive()
+    
+    out_dir <- input$netVisual_relative_heatmap_save_path
+    if (!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE)
+    
+    out_file <- file.path(
+      out_dir,
+      paste0(
+        "RelativeCommunicationHeatmap_Count_Weight_",
+        format(Sys.time(), "%Y%m%d_%H%M%S"),
+        ".pdf"
+      )
+    )
+    
+    pdf(
+      out_file,
+      width = input$netVisual_relative_heatmap_width,
+      height = input$netVisual_relative_heatmap_height
+    )
+    
+    res$plot_fun()
+    dev.off()
+    
+    showNotification(
+      paste0("Saved relative communication heatmap: ", out_file),
+      type = "message"
+    )
+  })
+  output$download_netVisual_relative_heatmap <- downloadHandler(
+    
+    filename = function() {
+      paste0(
+        "RelativeCommunicationHeatmap_Count_Weight_",
+        format(Sys.time(), "%Y%m%d_%H%M%S"),
+        ".pdf"
+      )
+    },
+    
+    content = function(file) {
+      
+      req(netVisual_relative_heatmap_reactive())
+      
+      res <- netVisual_relative_heatmap_reactive()
+      
+      pdf(
+        file,
+        width = input$netVisual_relative_heatmap_width,
+        height = input$netVisual_relative_heatmap_height
+      )
+      
+      res$plot_fun()
+      dev.off()
+      
+      showNotification(
+        "Relative communication heatmap downloaded successfully.",
+        type = "message",
+        duration = 3
+      )
+    }
+  )
+  # ----------------- VISUALIZATION FUNCTION Cell Cell Communication rankNet -----------------
+  rankNet_reactive <- reactive({
+    
+    req(rv$cccd_obj)
+    req(rv$cccd_obj$data_merge)
+    req(input$rankNet_font_size)
+    req(input$rankNet_title_size)
+    req(!rv$ui_freeze)
+    
+    cellchat_merge <- rv$cccd_obj$data_merge
+    
+    plot_fun <- function() {
+      
+      p1 <- rankNet(
+        cellchat_merge,
+        mode = "comparison",
+        show.raw = TRUE,
+        stacked = TRUE,
+        do.stat = TRUE
+      ) +
+        ggplot2::ggtitle("Stacked") +
+        ggplot2::theme(
+          plot.title = ggplot2::element_text(
+            size = input$rankNet_title_size,
+            face = "bold",
+            hjust = 0.5
+          ),
+          axis.title = ggplot2::element_text(
+            size = input$rankNet_font_size
+          ),
+          axis.text = ggplot2::element_text(
+            size = input$rankNet_font_size
+          ),
+          legend.title = ggplot2::element_text(
+            size = input$rankNet_font_size
+          ),
+          legend.text = ggplot2::element_text(
+            size = input$rankNet_font_size
+          )
+        )
+      
+      p2 <- rankNet(
+        cellchat_merge,
+        mode = "comparison",
+        show.raw = TRUE,
+        stacked = FALSE,
+        do.stat = TRUE
+      ) +
+        ggplot2::ggtitle("Unstacked") +
+        ggplot2::theme(
+          plot.title = ggplot2::element_text(
+            size = input$rankNet_title_size,
+            face = "bold",
+            hjust = 0.5
+          ),
+          axis.title = ggplot2::element_text(
+            size = input$rankNet_font_size
+          ),
+          axis.text = ggplot2::element_text(
+            size = input$rankNet_font_size
+          ),
+          legend.title = ggplot2::element_text(
+            size = input$rankNet_font_size
+          ),
+          legend.text = ggplot2::element_text(
+            size = input$rankNet_font_size
+          )
+        )
+      
+      print(
+        p1 + p2 +
+          patchwork::plot_layout(ncol = 2)
+      )
+      
+      invisible(NULL)
+    }
+    
+    list(
+      type = "plot",
+      plot_fun = plot_fun
+    )
+  })
+  
+  output$rankNet_control <- renderUI({
+    
+    pathway_n <- length(unique(rv$cccd_obj$data_merge@netP$pathways))
+    
+    height_val <- max(600, pathway_n * 18)
+    
+    div(
+      style = "max-width: 800px; max-width: 1000px; overflow-x: auto; overflow-y: auto; width: 100%;",
+      plotOutput(
+        "rankNet_plot",
+        height = paste0(height_val, "px"),
+        width = "800px"
+      )
+    )
+  })
+
+  
+  
+  output$rankNet_plot <- renderPlot({
+    
+    req(rankNet_reactive())
+    req(!rv$ui_freeze)
+    
+    res <- rankNet_reactive()
+    
+    if (is.list(res) && res$type == "message") {
+      plot.new()
+      text(0.5, 0.5, res$content, cex = 1.2, col = "red")
+      return()
+    }
+    
+    res$plot_fun()
+  })
+  observeEvent(input$save_rankNet, {
+    
+    req(rankNet_reactive())
+    req(input$rankNet_save_path)
+    
+    res <- rankNet_reactive()
+    
+    out_dir <- input$rankNet_save_path
+    
+    if (!dir.exists(out_dir)) {
+      dir.create(out_dir, recursive = TRUE)
+    }
+    
+    out_file <- file.path(
+      out_dir,
+      paste0(
+        "RankNet_",
+        format(Sys.time(), "%Y%m%d_%H%M%S"),
+        ".pdf"
+      )
+    )
+    
+    pdf(
+      out_file,
+      width = input$rankNet_width,
+      height = input$rankNet_height
+    )
+    
+    res$plot_fun()
+    
+    dev.off()
+    
+    showNotification(
+      paste0("Saved rankNet plot: ", out_file),
+      type = "message"
+    )
+  })
+  output$download_rankNet <- downloadHandler(
+    
+    filename = function() {
+      paste0(
+        "RankNet_",
+        format(Sys.time(), "%Y%m%d_%H%M%S"),
+        ".pdf"
+      )
+    },
+    
+    content = function(file) {
+      
+      req(rankNet_reactive())
+      
+      res <- rankNet_reactive()
+      
+      pdf(
+        file,
+        width = input$rankNet_width,
+        height = input$rankNet_height
+      )
+      
+      res$plot_fun()
+      
+      dev.off()
+      
+      showNotification(
+        "rankNet plot downloaded successfully.",
+        type = "message",
+        duration = 3
+      )
+    }
+  )
   # ----------------- Data Output Gene expression -----------------
   output$gene_expression_sub_ui <- renderUI({
     
