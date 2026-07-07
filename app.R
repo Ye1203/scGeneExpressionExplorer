@@ -2000,7 +2000,7 @@ server <- function(input, output, session) {
       
       fluidRow(
         column(3, numericInput("pathway_volcano_label_n", "The number of labels (based on top log2FC)", value = 10)),
-        column(3, numericInput("pathway_volcano_pdf_width", "Graph width (inch)", value = 3)),
+        column(3, numericInput("pathway_volcano_pdf_width", "Graph width (inch)", value = 4)),
         column(3, numericInput("pathway_volcano_pdf_height", "Graph height (inch)", value = 4))
       ),
       
