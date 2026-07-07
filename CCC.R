@@ -509,3 +509,4 @@ diagnose_cellchat_summary_method <- function(
     recommendation = recommendation
   ))
 }
+
