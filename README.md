@@ -1,243 +1,641 @@
-# scGeneExpressionExplorer README
+# scGeneExpressionExplorer
 
-This folder contains the Shiny application and analysis helper scripts for single-cell gene expression exploration, differential expression analysis, GSEA, UMAP/cell-type marker visualization, gene expression summary export, and CellChat-based cell-cell communication analysis.
+<div align="center">
 
-## Code sources and acknowledgements
+**An interactive Shiny application for downstream single-cell and single-nucleus RNA-seq analysis**
 
-Part of the original analysis code was adapted from Max's codebase.
+Differential Expression • GSEA • CellChat • Gene Expression Explorer • UMAP Visualization • SCC Integration
 
-- `DE_analysis.R` uses Max's `FindMarkersLoupe` workflow and notes the original Max code location as `/projectnb/wax-dk/max/RSRC/G190`.
-- GitHub dependency from Max: `mpyatkov/FindMarkersLoupe`
-  - Install command: `devtools::install_github("mpyatkov/FindMarkersLoupe")`
-- `app.R` also uses `NotationConverter`, with the commented install source:
-  - `devtools::install_github("mpyatkov/NotationConverter")`
+</div>
 
-The CellChat code used by this project is a modified fork of CellChat:
+---
 
-- Modified CellChat repository: <https://github.com/Ye1203/CellChat/tree/415849a378014b220e8f82e04c3835f346ed92ad>
-- This fork is based on `jinworks/CellChat` and should be used instead of installing the default upstream CellChat when reproducing this app environment.
+## Overview
 
-## Files
+**scGeneExpressionExplorer** is an R/Shiny application designed to simplify downstream analysis of single-cell (scRNA-seq) and single-nucleus (snRNA-seq) transcriptomic data.
 
-| File | Purpose |
-|---|---|
-| `app.R` | Main Shiny application. Provides UI and server logic for loading Seurat, DEG, GSEA, and CellChat objects; plotting UMAPs, dot plots, heatmaps, volcano plots, GSEA results, and CellChat visualizations. |
-| `DE_analysis.R` | Differential expression helper code. Uses Max's `FindMarkersLoupe`/SEGEX-style workflow to compare selected sample and cluster groups and export DEG tables. |
-| `GSEA_analysis.R` | Pre-ranked GSEA helper code using DEG output. Supports ranking by `fc`, `log2fc`, `fc-pvalue`, or `log2fc-pvalue`, and gene-set databases from MSigDB through `msigdbr`. |
-| `UmapPlot.R` | UMAP, dot plot, cluster summary table, marker heatmap, and cell-type marker helper functions. Includes marker lists and cluster annotation utilities. |
-| `gene_expression_output.R` | Creates gene expression summary tables by one or two metadata variables. Outputs mean expression, relative expression, and non-zero expression percentage. |
-| `CCC.R` | Front-end/helper functions for CellChat analysis submission. Writes parameter files, copies the Seurat object, generates a `qsub` script, submits SCC jobs, and provides a diagnostic function for choosing the CellChat expression-summary method. |
-| `cellchat_runner.R` | Command-line CellChat runner used by SCC jobs. Loads the Seurat object, splits control/treatment groups if needed, runs CellChat, saves `.rds` results, exports Excel communication tables, writes summaries, and optionally sends completion/error emails. |
-| `renv.lock` | Locked R package environment for reproducibility. |
+Instead of requiring users to manually write R scripts for each analysis, the application provides an intuitive graphical interface that integrates several commonly used downstream analyses into a single workflow.
 
-## Main functionality
+The application currently supports:
 
-### 1. Shiny app
+- Differential gene expression analysis
+- Gene Set Enrichment Analysis (GSEA)
+- Gene expression visualization
+- Cell-cell communication analysis using CellChat
+- Interactive visualization of UMAPs, marker genes, heatmaps, volcano plots, and communication networks
+- Automated CellChat execution on Boston University's Shared Computing Cluster (SCC)
 
-Run the main app with:
+The project is intended for researchers who wish to perform reproducible downstream analyses on processed Seurat objects without extensive programming experience while still maintaining compatibility with standard R workflows.
 
-```r
-shiny::runApp("app.R")
-```
+---
 
-The app supports:
+# Features
 
-- Seurat object loading
-- metadata-driven sample/cluster comparison setup
-- differential expression analysis
-- GSEA visualization
-- UMAP, dot plot, heatmap, and expression summary outputs
-- CellChat result loading and visualization
-- CellChat analysis submission to SCC using `qsub`
+## Differential Expression Analysis
 
-### 2. Differential expression
+- Compare any user-selected sample and cluster combinations
+- SEGEX-compatible differential expression output
+- Export complete DEG tables
+- Interactive volcano plots
+- Multiple comparison support
 
-`DE_analysis.R` defines `compute_de()`, which compares selected sample/cluster groups by creating temporary identities named `GROUP1` and `GROUP2`. It then runs `FindMarkersLoupe()` and converts output to SEGEX-compatible format.
+---
 
-Important note: this workflow follows a pseudo-bulk/SEGEX-compatible style. For general scRNA-seq or snRNA-seq differential expression, especially when not constrained by SEGEX compatibility, `Seurat::FindMarkers()` may be more appropriate.
+## Gene Set Enrichment Analysis (GSEA)
 
-### 3. GSEA
+- Pre-ranked GSEA
+- Multiple ranking strategies
+- GO Biological Process
+- Reactome
+- Hallmark
+- MSigDB integration via **msigdbr**
+- Interactive enrichment visualization
 
-`GSEA_analysis.R` defines `gsea_analysis_from_tsv()`, which reads DEG output, builds a ranked gene list, retrieves gene sets using `msigdbr`, and runs `clusterProfiler::GSEA()`.
+---
 
-Supported ranking methods:
+## Gene Expression Explorer
 
-- `fc`
-- `log2fc`
-- `fc-pvalue`
-- `log2fc-pvalue`
+Visualize gene expression across:
 
-Recommended interpretation: in single-cell analysis without true biological replicates, focus mainly on NES direction and magnitude rather than over-interpreting p-values.
+- Cell clusters
+- Sample groups
+- Experimental conditions
 
-### 4. Gene expression summary
+Generate summary tables including:
 
-`gene_expression_output.R` defines `create_expression_summary()`. For each selected gene and metadata group, it reports:
+- Mean expression
+- Relative expression
+- Percentage of expressing cells
 
-- mean expression
-- relative expression, normalized by the maximum mean expression for that gene across groups
-- non-zero proportion (%)
+---
 
-This is useful for exporting compact expression tables for marker genes or selected genes.
+## Cell-Cell Communication Analysis
 
-### 5. UMAP and cell-type marker visualization
+Integrated CellChat workflow supporting:
 
-`UmapPlot.R` provides helper functions for:
-
-- UMAP plotting
-- dot plots
-- cluster summary tables
-- marker-based cell-type prediction
-- marker heatmaps
-- combined UMAP/table/dotplot/heatmap layouts
-- optional UMAP reclustering utilities
-
-### 6. CellChat analysis
-
-CellChat analysis is split into two layers:
-
-- `CCC.R`: prepares and submits jobs from the Shiny app.
-- `cellchat_runner.R`: runs CellChat on SCC as a command-line script.
-
-The CellChat runner supports:
-
-- single combined analysis (`All Together`)
+- Human and mouse databases
+- Single dataset analysis
 - CONTROL vs TREATMENT comparison
-- species selection: human or mouse
-- pathway type filtering, such as `Secreted Signaling`, `Cell-Cell Contact`, `ECM-Receptor`, and `Non-protein Signaling`
-- probability method selection: `triMean`, `truncatedMean_0.1`, or `truncatedMean_0.05`
-- minimum cell filtering
-- merged CellChat output for comparison visualization
-- Excel export of `net` and `netP` communication tables
-- run summary text files
-- optional email notification
+- Pathway-specific visualization
+- Ligand-receptor exploration
+- Network centrality analysis
+- Communication heatmaps
+- Bubble plots
+- Circle plots
+- Chord diagrams
+- Pathway contribution analysis
 
-## CellChat code modification
+---
 
-This project should use the modified CellChat fork here:
+## UMAP Visualization
 
-<https://github.com/Ye1203/CellChat>
+Built-in visualization utilities include:
 
-Use this version when restoring or rebuilding the environment:
+- UMAP
+- DotPlot
+- Marker heatmap
+- Cluster summary tables
+- Automatic cell-type annotation
+- Marker-based cluster prediction
 
-```r
-renv::install("Ye1203/CellChat")
-renv::snapshot()
+---
+
+## Boston University SCC Integration
+
+Large CellChat analyses can be submitted directly to BU SCC through the graphical interface.
+
+The application automatically:
+
+- Generates parameter files
+- Creates qsub scripts
+- Copies required input files
+- Submits CellChat jobs
+- Collects results
+- Exports communication tables
+- Generates summary reports
+
+---
+
+# Workflow
+
+The typical workflow is illustrated below.
+
+```text
+Seurat Object
+      │
+      ▼
+Load into Shiny
+      │
+      ├──────── Differential Expression
+      │                 │
+      │                 ▼
+      │            DEG Table
+      │                 │
+      │                 ▼
+      │               GSEA
+      │
+      ├──────── Gene Expression Explorer
+      │
+      ├──────── UMAP Visualization
+      │
+      └──────── CellChat Analysis
+                        │
+                        ▼
+          SCC (optional for large datasets)
+                        │
+                        ▼
+        Communication Networks & Figures
 ```
 
-The app-side CellChat code was also customized in `app.R`, `CCC.R`, and `cellchat_runner.R` to support this workflow. Main project-level changes include:
+---
 
-- Shiny UI for selecting CellChat input parameters.
-- SCC job submission through generated `qsub` scripts.
-- Saving a reproducible parameter file for each CellChat run.
-- Automatic CONTROL/TREATMENT splitting based on selected sample metadata.
-- Automatic addition of a `C` prefix to numeric cluster labels containing `0`, avoiding CellChat or plotting issues with numeric/zero cluster IDs.
-- Pathway-type filtering before CellChat probability calculation.
-- Support for multiple probability summary methods: `triMean`, `truncatedMean(0.1)`, and `truncatedMean(0.05)`.
-- Diagnostic function to recommend a probability method based on ligand/receptor signal retention across clusters.
-- Export of CellChat communication tables to Excel.
-- Support for merged CellChat objects and comparison visualizations in the Shiny app.
+# Tutorial
 
-## Environment setup with renv
+A detailed user guide is provided in:
 
-The project uses `renv` for reproducible R package management. The provided `renv.lock` was generated for:
+**📄 How to use scGeneExpressionExplorer.pdf**
 
-- R version: `4.4.3`
-- Bioconductor version: `3.20`
-- CRAN repository: `https://cloud.r-project.org`
+The tutorial includes:
 
-### 1. Start R in the project folder
+- Data preparation
+- Loading Seurat objects
+- Differential expression analysis
+- GSEA
+- CellChat analysis
+- Gene expression visualization
+- Example screenshots
+- Typical analysis workflow
+
+---
+
+# Repository Structure
+
+```
+scGeneExpressionExplorer/
+│
+├── app.R
+├── CCC.R
+├── cellchat_runner.R
+├── DE_analysis.R
+├── GSEA_analysis.R
+├── gene_expression_output.R
+├── UmapPlot.R
+├── renv.lock
+├── renv/
+├── tutorial/
+│     └── How to use scGeneExpressionExplorer.pdf
+│
+└── README.md
+```
+
+---
+
+# Repository Contents
+
+| File | Description |
+|------|-------------|
+| `app.R` | Main Shiny application containing both the user interface and server logic. |
+| `CCC.R` | CellChat helper functions for generating SCC jobs and parameter files. |
+| `cellchat_runner.R` | Command-line CellChat workflow executed on SCC. |
+| `DE_analysis.R` | Differential expression analysis using the SEGEX-compatible workflow. |
+| `GSEA_analysis.R` | Gene Set Enrichment Analysis utilities based on DEG output. |
+| `gene_expression_output.R` | Gene expression summary table generation. |
+| `UmapPlot.R` | UMAP visualization, marker heatmaps, cell-type annotation, and plotting utilities. |
+| `renv.lock` | Locked package versions for reproducible installation. |
+
+---
+
+# Installation
+
+## Requirements
+
+- R ≥ 4.4
+- Bioconductor ≥ 3.20
+- Git
+- renv
+
+---
+
+## Clone the repository
 
 ```bash
-cd /path/to/scGeneExpressionExplorer
-module load R/4.4.3   # on BU SCC, if applicable
-R
+git clone https://github.com/your_repository/scGeneExpressionExplorer.git
+
+cd scGeneExpressionExplorer
 ```
 
-### 2. Install renv if needed
+---
+
+## Install renv
 
 ```r
 install.packages("renv")
 ```
 
-### 3. Restore the locked environment
+---
+
+## Restore the project environment
 
 ```r
 renv::restore()
 ```
 
-This installs package versions from `renv.lock` into the project-local `renv/library`.
+This will install all package versions recorded in **renv.lock**.
 
-### 4. Install the modified CellChat fork
+---
 
-If `renv::restore()` installs upstream CellChat or an older CellChat commit, reinstall the modified fork:
+## Install the customized CellChat package
+
+This project uses a customized version of CellChat instead of the original package.
+
+Install it using
 
 ```r
 renv::install("Ye1203/CellChat")
-renv::snapshot()
 ```
 
-### 5. Install Max-related GitHub dependencies if missing
+or
+
+```r
+devtools::install_github("Ye1203/CellChat")
+```
+
+---
+
+## Install additional dependencies
+
+Some helper packages were originally developed by Max and may need to be installed separately.
 
 ```r
 renv::install("mpyatkov/FindMarkersLoupe")
+
 renv::install("mpyatkov/NotationConverter")
-renv::snapshot()
 ```
 
-If `NotationConverter` is only available locally on SCC, install it from the local path used by the project/team instead of GitHub.
+If `NotationConverter` is only available locally on SCC, install it from the local project directory instead.
 
-## Running on SCC
+---
 
-The CellChat analysis workflow is designed for SCC job submission.
+# Quick Start
 
-`CCC.R` generates a job script similar to:
+Launch the application with
+
+```r
+shiny::runApp("app.R")
+```
+
+The graphical interface allows users to
+
+1. Load Seurat objects
+2. Configure sample metadata
+3. Perform differential expression analysis
+4. Run GSEA
+5. Visualize gene expression
+6. Submit CellChat analyses
+7. Explore CellChat results interactively
+
+---
+# CellChat Workflow
+
+Cell-cell communication analysis in **scGeneExpressionExplorer** is implemented as a two-stage workflow.
+
+The graphical interface is responsible for collecting user parameters and preparing the analysis, while the computationally intensive CellChat workflow is executed as a standalone command-line script on Boston University's Shared Computing Cluster (SCC).
+
+```
+Shiny App
+    │
+    ▼
+Generate parameter files
+    │
+    ▼
+Generate qsub script
+    │
+    ▼
+Submit SCC Job
+    │
+    ▼
+cellchat_runner.R
+    │
+    ▼
+CellChat Analysis
+    │
+    ▼
+Save Results
+    │
+    ▼
+Interactive Visualization
+```
+
+The CellChat workflow supports:
+
+- Single dataset analysis
+- CONTROL vs TREATMENT comparison
+- Human and mouse databases
+- Automatic pathway filtering
+- Multiple communication probability estimation methods
+- Parallel execution
+- Excel export
+- Communication network visualization
+
+---
+
+# Customized CellChat Package
+
+This project uses a customized version of CellChat rather than the original package.
+
+Repository:
+
+https://github.com/Ye1203/CellChat
+
+The customized package contains numerous improvements that were developed specifically for this application.
+
+# Application-level CellChat Modifications
+
+Besides modifications to the CellChat package itself, the Shiny application contains substantial workflow extensions implemented in
+
+- `app.R`
+- `CCC.R`
+- `cellchat_runner.R`
+
+These additions include
+
+## Interactive Parameter Selection
+
+The graphical interface allows users to configure
+
+- species
+- pathway categories
+- probability estimation method
+- minimum cell threshold
+- sample grouping
+- comparison settings
+
+without writing any R code.
+
+---
+
+## Automated SCC Submission
+
+The application automatically
+
+- saves analysis parameters
+- copies the Seurat object
+- generates a reproducible qsub script
+- submits the analysis
+- monitors execution
+- stores all outputs
+
+This eliminates manual command-line preparation.
+
+---
+
+## Reproducible Analysis
+
+Each CellChat analysis automatically records
+
+- input Seurat object
+- sample information
+- selected parameters
+- runtime settings
+- CPU allocation
+- generated qsub script
+
+making analyses fully reproducible.
+
+---
+
+## Automatic Metadata Processing
+
+The workflow additionally performs several preprocessing steps automatically.
+
+Examples include
+
+- CONTROL/TREATMENT splitting
+- cluster label validation
+- automatic "C" prefix for numeric clusters
+- pathway database filtering
+- merged CellChat generation
+
+These preprocessing steps reduce common user errors while preserving compatibility with CellChat.
+
+---
+
+## Diagnostic Utilities
+
+The application also provides helper functions for selecting an appropriate communication probability summary method.
+
+Users can compare
+
+- triMean
+- truncatedMean (0.1)
+- truncatedMean (0.05)
+
+according to ligand-receptor signal retention across clusters before running CellChat.
+
+---
+
+# Differential Expression Analysis
+
+Differential expression analysis is implemented in `DE_analysis.R`.
+
+The workflow is adapted from Max's original **FindMarkersLoupe** implementation and generates SEGEX-compatible differential expression tables.
+
+Compared with standard Seurat workflows, this implementation emphasizes compatibility with downstream SEGEX analysis pipelines.
+
+For conventional scRNA-seq studies, users may instead choose to perform differential expression using
+
+```r
+Seurat::FindMarkers()
+```
+
+before importing results into downstream analyses.
+
+---
+
+# Gene Set Enrichment Analysis
+
+The GSEA module performs pre-ranked enrichment analysis using differential expression output.
+
+Supported ranking methods include
+
+- fc
+- log2fc
+- fc × -log10(p-value)
+- log2fc × -log10(p-value)
+
+Supported databases include
+
+- GO Biological Process
+- Reactome
+- Hallmark
+
+through the **msigdbr** package.
+
+For single-cell datasets without biological replicates, interpretation should primarily focus on the **Normalized Enrichment Score (NES)** rather than statistical significance.
+
+---
+
+# Running on Boston University SCC
+
+Large CellChat analyses are intended to be executed on BU SCC.
+
+The application automatically generates a command similar to
 
 ```bash
 module load R/4.4.3
+
 Rscript cellchat_runner.R \
-  --seurat_file=/path/to/input.rds \
-  --sample_info_file=/path/to/cellchat_sample_info.rds \
-  --cluster_column=seurat_clusters \
-  --species=mouse \
-  --pathway_type='Secreted Signaling|Cell-Cell Contact' \
-  --prob_type=triMean \
-  --min_cells=10 \
-  --cores=8 \
-  --save_path=/path/to/output \
-  --email=NA
+    --seurat_file input.rds \
+    --sample_info_file sample_info.rds \
+    --cluster_column seurat_clusters \
+    --species mouse \
+    --pathway_type "Secreted Signaling|Cell-Cell Contact" \
+    --prob_type triMean \
+    --min_cells 10 \
+    --cores 8 \
+    --save_path output \
+    --email your_email
 ```
 
-The generated output folder may include:
+The output directory typically contains
 
-- `cellchat_parameters.txt`
-- `cellchat_sample_info.rds`
-- `cellchat_analysis.qsub`
-- `ccc.log`
-- `cellchat_object.rds` for all-together analysis
-- `cellchat_compare.rds` for CONTROL/TREATMENT analysis
-- `cellchat_tables.xlsx`
-- `analysis_summary.txt`
+- CellChat objects
+- merged CellChat objects
+- Excel communication tables
+- parameter files
+- qsub scripts
+- analysis summaries
+- log files
 
-## Recommended project structure
+---
 
-```text
-scGeneExpressionExplorer/
-├── app.R
-├── DE_analysis.R
-├── GSEA_analysis.R
-├── UmapPlot.R
-├── gene_expression_output.R
-├── CCC.R
-├── cellchat_runner.R
-├── renv.lock
-├── renv/
-└── README.md
+# Code Sources and Acknowledgements
+
+This project incorporates and extends several existing open-source tools.
+
+## Max's Analysis Code
+
+Parts of the differential expression workflow were adapted from Max's internal analysis code.
+
+These components include
+
+- FindMarkersLoupe workflow
+- SEGEX-compatible DEG export
+- UMAP helper utilities
+- Marker visualization functions
+
+Original code references are preserved within the corresponding source files whenever applicable.
+
+---
+
+## Open-source Packages
+
+This project is built upon numerous outstanding open-source R packages, including
+
+- Seurat
+- CellChat
+- clusterProfiler
+- msigdbr
+- ComplexHeatmap
+- ggplot2
+- patchwork
+- openxlsx
+- future
+- shiny
+
+The developers of these packages are gratefully acknowledged.
+
+---
+
+# Reproducibility
+
+This project uses **renv** for package management.
+
+The complete software environment is recorded in
+
+```
+renv.lock
 ```
 
-## Notes and caveats
+To restore the environment
 
-- Keep `app.R`, helper scripts, and `renv.lock` in the same project folder unless paths are updated manually.
-- `cellchat_runner.R` currently contains a hard-coded `project_root`; update it if the project is moved to a different SCC directory.
-- For large Seurat objects and CellChat jobs, run on SCC rather than a local laptop.
-- CellChat outputs can be large. Store results in a dedicated output directory for each run.
-- After changing package versions, run `renv::snapshot()` so the lockfile stays synchronized with the working environment.
+```r
+install.packages("renv")
+
+renv::restore()
+```
+
+Whenever package versions are updated, synchronize the lock file using
+
+```r
+renv::snapshot()
+```
+
+---
+
+# Frequently Asked Questions
+
+### Why use a customized CellChat package?
+
+The customized version contains visualization improvements, workflow extensions, and bug fixes that are required by the Shiny application.
+
+---
+
+### Can I use the original CellChat package?
+
+The application may still run, but some visualization modules and comparison plots may not behave as expected. The customized package is therefore recommended.
+
+---
+
+### Can I run CellChat locally?
+
+Yes.
+
+However, large datasets are recommended to be analyzed on BU SCC because CellChat can be computationally intensive.
+
+---
+
+### Is this application limited to mouse data?
+
+No.
+
+Both mouse and human CellChat databases are supported.
+
+---
+
+# Citation
+
+If you use this application in your research, please cite the original publications of the software packages used in your analyses, including
+
+- Seurat
+- CellChat
+- clusterProfiler
+- msigdbr
+
+Please also acknowledge this repository whenever appropriate.
+
+---
+
+# Contact
+
+**Bingtian Ye**
+
+Graduate Student  
+Boston University
+
+Email:
+
+- btye@bu.edu
+- biangtian@icloud.com
+
+GitHub:
+
+https://github.com/Ye1203
+
+---
+
+# License
+
+This repository contains original code together with modifications of several open-source projects.
+
+Please follow the licenses of the corresponding upstream projects when redistributing or extending this software.
