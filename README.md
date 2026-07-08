@@ -29,6 +29,21 @@ The project is intended for researchers who wish to perform reproducible downstr
 
 ---
 
+## Tutorial
+
+A detailed tutorial describing the graphical interface and example workflows is available here:
+
+**[How to use scGeneExpressionExplorer.pdf](How%20to%20use%20scGeneExpressionExplorer.pdf)**
+
+The tutorial includes:
+
+- Data preparation
+- Differential expression analysis
+- Gene Set Enrichment Analysis (GSEA)
+- Cell-cell communication analysis
+- Gene expression visualization
+- Example screenshots of the Shiny interface
+
 # Features
 
 ## Differential Expression Analysis
