@@ -2314,13 +2314,7 @@ server <- function(input, output, session) {
       fluidRow(
         column(3, numericInput("role_scatter_axis_title_size", "Axis title size", value = 12)),
         column(3, numericInput("role_scatter_legend_text_size", "Legend text size", value = 10)),
-        column(3, numericInput("role_scatter_legend_title_size", "Legend title size", value = 11)),
-        column(3, selectInput(
-          "role_scatter_legend_position",
-          "Legend position",
-          choices = c("right", "left", "top", "bottom", "none"),
-          selected = "right"
-        ))
+        column(3, numericInput("role_scatter_legend_title_size", "Legend title size", value = 11))
       ),
       
       fluidRow(
@@ -3274,6 +3268,12 @@ server <- function(input, output, session) {
         label = "Seurat File Path",
         placeholder = "/path/to/seurat_file.rds",
         value = rv$data_obj_path),
+      h4("DEG result (Optional):"),
+      path_input_ui(
+        id = "deg",
+        label = "DEG File Path (.tsv)",
+        placeholder = "/path/to/deg_result.tsv",
+        value = rv$deg_obj_path),
       uiOutput("gene_expression_sub_ui")
     )
   })
@@ -5468,14 +5468,9 @@ server <- function(input, output, session) {
         size = "l",
         easyClose = FALSE,
         footer = tagList(
-          actionButton(
-            "confirm_netP_pathway",
-            "Confirm",
-            class = "btn-success"
-          ),
-          modalButton("Close")
+          actionButton("confirm_netP_pathway", "Confirm", class = "btn-success"),
+          actionButton("close_modal", "Close")
         ),
-        
         fluidRow(
           column(
             width = 5,
@@ -9110,7 +9105,7 @@ server <- function(input, output, session) {
           axis.title = ggplot2::element_text(size = input$role_scatter_axis_title_size, face = "bold"),
           legend.text = ggplot2::element_text(size = input$role_scatter_legend_text_size),
           legend.title = ggplot2::element_text(size = input$role_scatter_legend_title_size),
-          legend.position = input$role_scatter_legend_position
+          legend.position = "none"
         )
       
       return(p)
@@ -11968,7 +11963,7 @@ server <- function(input, output, session) {
       )
     }
   )
-  # ----------------- VISUALIZATION FUNCTION Cell Cell Communication relatived netVisual_heatmap -----------------
+  # ----------------- VISUALIZATION FUNCTION Cell Cell Communication netVisual_heatmap -----------------
   netVisual_relative_heatmap_reactive <- reactive({
     
     req(rv$cccd_obj)
@@ -12147,7 +12142,7 @@ server <- function(input, output, session) {
       )
     }
   )
-  # ----------------- VISUALIZATION FUNCTION CellChat netVisual_diffInteraction -----------------
+  # ----------------- VISUALIZATION FUNCTION Cell Cell Communication relatived netVisual_diffInteraction -----------------
   plot_diffInteraction_pathway_message <- function(msg) {
     plot.new()
     text(0.5, 0.5, msg, col = "red", cex = 1.2)
@@ -12494,8 +12489,8 @@ server <- function(input, output, session) {
       style = "max-width: 800px; overflow-x: auto; width: 100%;",
       plotOutput(
         "diffInteraction_pathway_plot",
-        height = "450px",
-        width = "900px"
+        height = "400px",
+        width = "800px"
       )
     )
   })
